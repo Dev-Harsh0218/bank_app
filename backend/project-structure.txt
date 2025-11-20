@@ -1,0 +1,47 @@
+/Users/dev-harsh0218/Business/Astrounaut/yes_bank/backend/
+├── main.go                     # Application entry point
+├── go.mod                      # Module definition
+├── go.sum                      # Dependency checksums
+├── .env                        # Environment variables (git ignored)
+├── .env.example                # Environment template
+├── .gitignore                  # Git ignore rules
+│
+├── internal/                   # Private application code
+│   ├── config/                 # Configuration handling
+│   │   └── config.go           # Config loader and struct
+│   │
+│   ├── database/               # Database layer
+│   │   └── database.go         # DB connection and utilities
+│   │
+│   ├── models/                 # Data models (DDD)
+│   │   ├── user.go             # User entity with methods
+│   │   └── message.go          # Message entity
+│   │
+│   ├── handlers/               # HTTP handlers
+│   │   ├── auth.go             # Authentication handlers
+│   │   └── messages.go         # Message handlers
+│   │
+│   ├── middleware/             # Custom middleware
+│   │   └── auth.go             # JWT auth middleware
+│   │
+│   ├── utils/                  # Utilities
+│   │   ├── jwt.go              # JWT token utilities
+│   │   └── validation.go       # Input validation
+│   │
+│   └── service/                # Business logic layer
+│       ├── auth_service.go     # Authentication business logic
+│       └── message_service.go  # Message business logic
+│
+├── pkg/                        # Public reusable packages
+│   └── response/               # Standardized responses
+│       └── response.go         # API response formatting
+│
+├── routes/                     # Route definitions
+│   └── api.go                  # API route setup
+│
+├── docs/                       # Documentation
+│   └── API.md                  # API documentation
+│
+└── tests/                      # Test files
+    ├── integration/            # Integration tests
+    └── unit/                   # Unit tests
