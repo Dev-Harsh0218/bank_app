@@ -13,65 +13,65 @@ import (
 	// local-modules
 	"message-backend/internal/config"
 	"message-backend/internal/database"
+	"message-backend/internal/handlers"
+	"message-backend/internal/middleware"
 	"message-backend/internal/models"
 
 	//internal modules
 	"github.com/gin-gonic/gin"
 )
 
-func main(){
+func main() {
 	// Load configuration from environment variables
 	cfg := config.LoadConfig()
 
-    // set Gin mode based on environment
-    if cfg.AppEnv == "production" {
-        gin.SetMode(gin.ReleaseMode)
-    } else {
-        gin.SetMode(gin.DebugMode)
-    }
+	// set Gin mode based on environment
+	if cfg.AppEnv == "production" {
+		gin.SetMode(gin.ReleaseMode)
+	} else {
+		gin.SetMode(gin.DebugMode)
+	}
 
+	db, err := database.InitDB()
+	if err != nil {
+		log.Fatalf("X Failed to initialize database: %v", err)
+	}
+	defer database.CloseDB()
 
+	// Auto migrate models (only User now)
+	if err := db.AutoMigrate(&models.User{}); err != nil {
+		log.Fatalf("X Failed to migrate database: %v", err)
+	}
 
-    db, err := database.InitDB()
-    if err != nil {
-        log.Fatalf("X Failed to initialize database: %v", err)
-    }
-    defer database.CloseDB()
+	//Gin router
+	router := gin.New()
+	router.Use(gin.Logger())
+	router.Use(gin.Recovery())
 
-    // Auto migrate models
-    if err := db.AutoMigrate(&models.User{}, &models.Message{}); err != nil {
-        log.Fatalf("X Failed to migrate database: %v", err)
-    }
+	// setup routes
+	setupRoutes(router)
 
-    //Gin router
-    router := gin.New()
-    router.Use(gin.Logger())
-    router.Use(gin.Recovery())
-
-    // setup routes
-    setupRoutes(router)
-
-    //create server with timeout
-    server := &http.Server{
-        Addr: cfg.ServerHost + ":" + cfg.ServerPort,
-        Handler: router,
-        ReadTimeout: 30 * time.Second,
+	//create server with timeout
+	server := &http.Server{
+		Addr:         cfg.ServerHost + ":" + cfg.ServerPort,
+		Handler:      router,
+		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
-        IdleTimeout: 60 * time.Second,
-    }
+		IdleTimeout:  60 * time.Second,
+	}
 
-    // Starting server in goroutine
-    go func() {
+	// Starting server in goroutine
+	go func() {
 		log.Printf("🚀 Server starting on %s:%s", cfg.ServerHost, cfg.ServerPort)
 		log.Printf("📊 Environment: %s", cfg.AppEnv)
 		log.Printf("🔧 Debug mode: %t", cfg.AppDebug)
-		
+
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("❌ Failed to start server: %v", err)
 		}
 	}()
 
-    // Wait for interrupt signal for graceful shutdown
+	// Wait for interrupt signal for graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
@@ -89,6 +89,13 @@ func main(){
 }
 
 func setupRoutes(router *gin.Engine) {
+	// Add CORS middleware
+	router.Use(middleware.CORSMiddleware())
+	
+	// Initialize handlers
+	authHandler := handlers.NewAuthHandler()
+	authMiddleware := middleware.NewAuthMiddleware()
+	
 	// Health check
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
@@ -97,24 +104,48 @@ func setupRoutes(router *gin.Engine) {
 			"version":   "1.0.0",
 		})
 	})
-
+	
 	// API v1 routes
 	apiV1 := router.Group("/api/v1")
 	{
-		// Public routes
+		// Public auth routes
+		auth := apiV1.Group("/auth")
+		{
+			auth.POST("/signup", authHandler.Signup)
+			auth.POST("/login", authHandler.Login)
+			auth.POST("/logout", authHandler.Logout)
+		}
+		
+		// Protected routes
+		protected := apiV1.Group("")
+		protected.Use(authMiddleware.JWTAuth())
+		{
+			// User profile
+			protected.GET("/profile", authHandler.GetProfile)
+			
+			// Admin only routes
+			admin := protected.Group("")
+			admin.Use(authMiddleware.RoleMiddleware(models.RoleAdmin))
+			{
+				admin.POST("/users", authHandler.CreateUser)
+				admin.PUT("/users/:id/role", authHandler.UpdateUserRole)
+			}
+			
+			// Add more protected routes here later
+		}
+		
+		// Public status
 		apiV1.GET("/status", func(c *gin.Context) {
 			c.JSON(200, gin.H{"message": "API is running"})
 		})
-
-		// We'll add auth and message routes here later
 	}
-
+	
 	// Default route
 	router.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{
-			"message":   "Message Backend API",
+			"message":   "Bank App Backend API",
 			"version":   "1.0.0",
-			"endpoints": []string{"/health", "/api/v1/status"},
+			"endpoints": []string{"/health", "/api/v1/auth/signup", "/api/v1/auth/login", "/api/v1/auth/logout", "/api/v1/profile", "/api/v1/users", "/api/v1/status"},
 		})
 	})
 }

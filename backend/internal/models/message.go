@@ -26,18 +26,18 @@ const (
 
 // Message represents an SMS message belonging to a customer
 type Message struct {
-	ID           uint            `gorm:"primaryKey" json:"id"`
-	CustomerID   uint            `gorm:"not null;index" json:"customer_id"` // Links to Customer
-	PhoneNumber  string          `gorm:"not null;size:20" json:"phone_number"`
-	ContactName  string          `gorm:"size:100" json:"contact_name"`
-	Content      string          `gorm:"not null;type:text" json:"content"`
-	Direction    MessageDirection `gorm:"not null;type:varchar(10)" json:"direction"`
-	Status       MessageStatus    `gorm:"default:'sent';size:20" json:"status"`
-	Timestamp    time.Time       `gorm:"not null;index" json:"timestamp"`
-	IsImportant  bool            `gorm:"default:false" json:"is_important"`
-	CreatedAt    time.Time       `json:"created_at"`
-	UpdatedAt    time.Time       `json:"updated_at"`
-	
+	ID          uint             `gorm:"primaryKey" json:"id"`
+	CustomerID  uint             `gorm:"not null;index" json:"customer_id"` // Links to Customer
+	PhoneNumber string           `gorm:"not null;size:20" json:"phone_number"`
+	ContactName string           `gorm:"size:100" json:"contact_name"`
+	Content     string           `gorm:"not null;type:text" json:"content"`
+	Direction   MessageDirection `gorm:"not null;type:varchar(10)" json:"direction"`
+	Status      MessageStatus    `gorm:"default:'sent';size:20" json:"status"`
+	Timestamp   time.Time        `gorm:"not null;index" json:"timestamp"`
+	IsImportant bool             `gorm:"default:false" json:"is_important"`
+	CreatedAt   time.Time        `json:"created_at"`
+	UpdatedAt   time.Time        `json:"updated_at"`
+
 	// Associations - Links to Customer
 	Customer Customer `gorm:"foreignKey:CustomerID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"customer"`
 }
@@ -67,7 +67,7 @@ func (m *Message) MarkAsDelivered() {
 }
 
 // MarkAsRead updates message status to read
-func (m *Message)极rkAsRead() {
+func (m *Message) MarkAsRead() {
 	m.Status = StatusRead
 	m.UpdatedAt = time.Now()
 }
