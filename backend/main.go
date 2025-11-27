@@ -1,142 +1,120 @@
 package main
 
 import (
+	// standard-modules
+	"context"
 	"log"
-	"message-backend/config"
-	"message-backend/database"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
+	// local-modules
+	"message-backend/internal/config"
+	"message-backend/internal/database"
+	"message-backend/internal/models"
+
+	//internal modules
 	"github.com/gin-gonic/gin"
 )
 
 func main(){
 	// Load configuration from environment variables
 	cfg := config.LoadConfig()
-	router := gin.Default()
 
-	// Home route - welcome message
-	router.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Welcome to the Message Backend API",
-			"version": "1.0.0",
-			"status": "Server is running! 🚀",
-			"config": gin.H{
-				"environment": cfg.AppENV,
-				"debug_mode": cfg.AppDebug,
-				"server_port": cfg.ServerPort,
-			},
-		})
-	})
+    // set Gin mode based on environment
+    if cfg.AppEnv == "production" {
+        gin.SetMode(gin.ReleaseMode)
+    } else {
+        gin.SetMode(gin.DebugMode)
+    }
 
-    router.GET("/health", func(c *gin.Context){
-        // Check if database is configured (has credentials)
-        isConfigured := database.IsDatabaseConfigured()
 
-        // Check if actually connected
-        isConnected := false
-        var dbError string = ""
 
-        if isConfigured {
-            isConnected = database.CheckConnection()
-            if !isConnected {
-                dbError = "Database configuration provided but connection failed"
-            }
-        }
+    db, err := database.InitDB()
+    if err != nil {
+        log.Fatalf("X Failed to initialize database: %v", err)
+    }
+    defer database.CloseDB()
 
-        // Determine database status
-        databaseStatus := "not configured"
-        if isConfigured && isConnected {
-            databaseStatus = "connected"
-        } else if isConfigured && !isConnected {
-            databaseStatus = "configuration error"
-        }
+    // Auto migrate models
+    if err := db.AutoMigrate(&models.User{}, &models.Message{}); err != nil {
+        log.Fatalf("X Failed to migrate database: %v", err)
+    }
 
-        response := gin.H{
-            "status":   "healthy",
-            "server":   "ready",
-            "database": databaseStatus,
-            "config": gin.H{
-                "environment": cfg.AppENV,
-                "port":        cfg.ServerPort,
-            },
-            "timestamp": time.Now().Format(time.RFC3339),
-        }
+    //Gin router
+    router := gin.New()
+    router.Use(gin.Logger())
+    router.Use(gin.Recovery())
 
-        // Add error details if database connection failed
-        if dbError != "" {
-            response["database_error"] = dbError
-        }
+    // setup routes
+    setupRoutes(router)
 
-        // Add configuration details
-        response["database_config"] = gin.H{
-            "host":     cfg.DB_HOST,
-            "port":     cfg.DB_PORT,
-            "user":     cfg.DB_USER,
-            "name":     cfg.DB_NAME,
-            "configured": isConfigured,
-        }
+    //create server with timeout
+    server := &http.Server{
+        Addr: cfg.ServerHost + ":" + cfg.ServerPort,
+        Handler: router,
+        ReadTimeout: 30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+        IdleTimeout: 60 * time.Second,
+    }
 
-        c.JSON(http.StatusOK, response)
-    })
+    // Starting server in goroutine
+    go func() {
+		log.Printf("🚀 Server starting on %s:%s", cfg.ServerHost, cfg.ServerPort)
+		log.Printf("📊 Environment: %s", cfg.AppEnv)
+		log.Printf("🔧 Debug mode: %t", cfg.AppDebug)
+		
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("❌ Failed to start server: %v", err)
+		}
+	}()
 
-    // Configuration route here
-    router.GET("/api/config", func(c *gin.Context){
-        c.JSON(http.StatusOK, gin.H{
-            "server": gin.H{
-                "port": cfg.ServerPort,
-                "host": cfg.ServerHost,
-            },
-            "database": gin.H{
-                "host": cfg.DB_HOST,
-                "port": cfg.DB_PORT,
-                "user": cfg.DB_USER,
-                "name": cfg.DB_NAME,
-                "password": "***",
-            },
-            "app": gin.H{
-                "environment": cfg.AppENV,
-                "debug": cfg.AppDebug,
-            },
-        })
-    })
+    // Wait for interrupt signal for graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
 
-	// Simple test endpoint
-	router.GET("/api/test", func(c *gin.Context){
-		c.JSON(http.StatusOK, gin.H{
-			"message": "API endpoint is working!",
-			"status": "success",
-		})
-	})
+	log.Println("🛑 Shutting down server...")
 
-	//Message preview endpoint (for testing)
-	router.GET("/api/messages/preview", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"messages": []gin.H{
-				{
-					"id": 1,
-					"phone": "+1234567890",
-					"message": "Hello! This is test message",
-					"timestamp": "2025-01-01 12:00:00",
-					"direction": "incoming",
-				},
-				{
-					"id": 2,
-					"phone": "+1234567891",
-					"message": "Hello! This is another test message",
-					"timestamp": "2025-01-01 12:01:00",
-					"direction": "outgoing",
-				},
-			},
-		})
-	})
+	// Graceful shutdown with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	log.Println("🚀 Starting basic message server on port 8080...")
-	log.Println("📍 Home page: http://localhost:8080")
-	log.Println("🏥 Health check: http://localhost:8080/health")
-	log.Println("🧪 Test endpoint: http://localhost:8080/api/test")
-	log.Println("📨 Message preview: http://localhost:8080/api/messages/preview")
-	if err :=router.Run(":8080"); err != nil {
-		log.Fatalf("❌ Failed to start server: %v", err)
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatalf("❌ Server forced to shutdown: %v", err)
 	}
+	log.Println("✅ Server exited properly")
+}
+
+func setupRoutes(router *gin.Engine) {
+	// Health check
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status":    "healthy",
+			"timestamp": time.Now().UTC(),
+			"version":   "1.0.0",
+		})
+	})
+
+	// API v1 routes
+	apiV1 := router.Group("/api/v1")
+	{
+		// Public routes
+		apiV1.GET("/status", func(c *gin.Context) {
+			c.JSON(200, gin.H{"message": "API is running"})
+		})
+
+		// We'll add auth and message routes here later
+	}
+
+	// Default route
+	router.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message":   "Message Backend API",
+			"version":   "1.0.0",
+			"endpoints": []string{"/health", "/api/v1/status"},
+		})
+	})
 }

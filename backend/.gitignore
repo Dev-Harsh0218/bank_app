@@ -1,0 +1,40 @@
+# Binaries
+/bin/
+/backend
+
+# Environment files
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# Dependency directories
+vendor/
+node_modules/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+/dist/
+/build/
+/coverage/
+
+# Database
+*.db
+*.sqlite
+/dbdata/
+
+# Go specific
+/go.sum
