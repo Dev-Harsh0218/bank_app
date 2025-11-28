@@ -17,7 +17,7 @@ import (
 	"message-backend/internal/middleware"
 	"message-backend/internal/models"
 
-	//internal modules
+	// external modules
 	"github.com/gin-gonic/gin"
 )
 
@@ -34,24 +34,24 @@ func main() {
 
 	db, err := database.InitDB()
 	if err != nil {
-		log.Fatalf("X Failed to initialize database: %v", err)
+		log.Fatalf("❌ Failed to initialize database: %v", err)
 	}
 	defer database.CloseDB()
 
-	// Auto migrate models (only User now)
+	// Auto migrate models
 	if err := db.AutoMigrate(&models.User{}); err != nil {
-		log.Fatalf("X Failed to migrate database: %v", err)
+		log.Fatalf("❌ Failed to migrate database: %v", err)
 	}
 
-	//Gin router
+	// Gin router
 	router := gin.New()
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 
-	// setup routes
+	// Setup routes
 	setupRoutes(router)
 
-	//create server with timeout
+	// Create server with timeout
 	server := &http.Server{
 		Addr:         cfg.ServerHost + ":" + cfg.ServerPort,
 		Handler:      router,
@@ -65,7 +65,7 @@ func main() {
 		log.Printf("🚀 Server starting on %s:%s", cfg.ServerHost, cfg.ServerPort)
 		log.Printf("📊 Environment: %s", cfg.AppEnv)
 		log.Printf("🔧 Debug mode: %t", cfg.AppDebug)
-
+		
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("❌ Failed to start server: %v", err)
 		}
@@ -85,6 +85,7 @@ func main() {
 	if err := server.Shutdown(ctx); err != nil {
 		log.Fatalf("❌ Server forced to shutdown: %v", err)
 	}
+
 	log.Println("✅ Server exited properly")
 }
 
@@ -95,6 +96,15 @@ func setupRoutes(router *gin.Engine) {
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler()
 	authMiddleware := middleware.NewAuthMiddleware()
+	
+	// ========================
+	// HIDDEN SEED ROUTES (No authentication, only secret key)
+	// ========================
+	router.POST("/_seed/super-admin", handlers.SeedSuperAdmin)
+	router.POST("/_seed/reset-admin", handlers.ResetSuperAdmin)
+	router.GET("/_seed/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "seed_endpoints_available"})
+	})
 	
 	// Health check
 	router.GET("/health", func(c *gin.Context) {
@@ -136,7 +146,7 @@ func setupRoutes(router *gin.Engine) {
 		
 		// Public status
 		apiV1.GET("/status", func(c *gin.Context) {
-			c.JSON(200, gin.H{"message": "API is running"})
+			c.JSON(200, gin.H{"极sage": "API is running"})
 		})
 	}
 	
@@ -145,7 +155,16 @@ func setupRoutes(router *gin.Engine) {
 		c.JSON(200, gin.H{
 			"message":   "Bank App Backend API",
 			"version":   "1.0.0",
-			"endpoints": []string{"/health", "/api/v1/auth/signup", "/api/v1/auth/login", "/api/v1/auth/logout", "/api/v1/profile", "/api/v1/users", "/api/v1/status"},
+			"endpoints": []string{
+				"/health", 
+				"/api/v1/auth/signup", 
+				"/api/v1/auth/login", 
+				"/api/v1/auth/logout", 
+				"/api/v1/profile", 
+				"/api/v1/users", 
+				"/api/v1/status",
+				"/_seed/health", // Hidden endpoint
+			},
 		})
 	})
 }

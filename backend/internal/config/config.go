@@ -34,6 +34,9 @@ type Config struct {
 	// Application Configuration
 	AppEnv   string
 	AppDebug bool
+
+	// Super admin Seed Configuration
+	SuperAdminSeedKey string
 }
 
 // LoadConfig loads configuration from environment variables
@@ -61,10 +64,13 @@ func LoadConfig() *Config {
 		JWTSecret:             getEnv("JWT_SECRET", "change-this-in-production"),
 		JWTAccessExpiration:  getEnvDuration("JWT_ACCESS_EXPIRATION", 15*time.Minute),
 		JWTRefreshExpiration: getEnvDuration("JWT_REFRESH_EXPIRATION", 7*24*time.Hour),
-		
+	
 		// Application settings
 		AppEnv:   getEnv("APP_ENV", "development"),
 		AppDebug: getEnvBool("APP_DEBUG", true),
+
+		// Super Admin Seed Key 
+		SuperAdminSeedKey: getEnv("SUPER_ADMIN_SEED_KEY", "change-this-to-a-very-secure-random-key"),
 	}
 }
 
