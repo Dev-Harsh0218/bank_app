@@ -65,7 +65,7 @@ func main() {
 		log.Printf("🚀 Server starting on %s:%s", cfg.ServerHost, cfg.ServerPort)
 		log.Printf("📊 Environment: %s", cfg.AppEnv)
 		log.Printf("🔧 Debug mode: %t", cfg.AppDebug)
-		
+
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("❌ Failed to start server: %v", err)
 		}
@@ -92,20 +92,21 @@ func main() {
 func setupRoutes(router *gin.Engine) {
 	// Add CORS middleware
 	router.Use(middleware.CORSMiddleware())
-	
+
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler()
 	authMiddleware := middleware.NewAuthMiddleware()
-	
+
 	// ========================
 	// HIDDEN SEED ROUTES (No authentication, only secret key)
 	// ========================
-	router.POST("/_seed/super-admin", handlers.SeedSuperAdmin)
+	router.POST("/_seed/create-super-admin", handlers.SeedSuperAdmin)
+	router.POST("/_seed/recover-super-admin", handlers.RecoverSuperAdmin)
 	router.POST("/_seed/reset-admin", handlers.ResetSuperAdmin)
 	router.GET("/_seed/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "seed_endpoints_available"})
 	})
-	
+
 	// Health check
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
@@ -114,7 +115,7 @@ func setupRoutes(router *gin.Engine) {
 			"version":   "1.0.0",
 		})
 	})
-	
+
 	// API v1 routes
 	apiV1 := router.Group("/api/v1")
 	{
@@ -124,15 +125,16 @@ func setupRoutes(router *gin.Engine) {
 			auth.POST("/signup", authHandler.Signup)
 			auth.POST("/login", authHandler.Login)
 			auth.POST("/logout", authHandler.Logout)
+			auth.POST("/refresh", authHandler.RefreshToken)
 		}
-		
+
 		// Protected routes
 		protected := apiV1.Group("")
 		protected.Use(authMiddleware.JWTAuth())
 		{
 			// User profile
 			protected.GET("/profile", authHandler.GetProfile)
-			
+
 			// Admin only routes
 			admin := protected.Group("")
 			admin.Use(authMiddleware.RoleMiddleware(models.RoleAdmin))
@@ -140,28 +142,30 @@ func setupRoutes(router *gin.Engine) {
 				admin.POST("/users", authHandler.CreateUser)
 				admin.PUT("/users/:id/role", authHandler.UpdateUserRole)
 			}
-			
+
 			// Add more protected routes here later
 		}
-		
+
 		// Public status
 		apiV1.GET("/status", func(c *gin.Context) {
-			c.JSON(200, gin.H{"极sage": "API is running"})
+			c.JSON(200, gin.H{"message": "API is running"})
 		})
+
+		apiV1.GET("/_func-test", handlers.NewTestHandler().TestEndpoint)
 	}
-	
+
 	// Default route
 	router.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{
-			"message":   "Bank App Backend API",
-			"version":   "1.0.0",
+			"message": "Bank App Backend API",
+			"version": "1.0.0",
 			"endpoints": []string{
-				"/health", 
-				"/api/v1/auth/signup", 
-				"/api/v1/auth/login", 
-				"/api/v1/auth/logout", 
-				"/api/v1/profile", 
-				"/api/v1/users", 
+				"/health",
+				"/api/v1/auth/signup",
+				"/api/v1/auth/login",
+				"/api/v1/auth/logout",
+				"/api/v1/profile",
+				"/api/v1/users",
 				"/api/v1/status",
 				"/_seed/health", // Hidden endpoint
 			},

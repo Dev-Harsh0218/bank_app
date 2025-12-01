@@ -18,15 +18,48 @@ const (
 
 // User represents administrators who can access the management panel
 type User struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	Username  string    `gorm:"uniqueIndex;not null;size:50" json:"username"`
-	Email     string    `gorm:"uniqueIndex;size:100" json:"email"`
-	Password  string    `gorm:"not null" json:"-"`
-	Role      string    `gorm:"default:user;size:20" json:"role"` // Changed default to "user"
-	IsActive  bool      `gorm:"default:true" json:"is_active"`
-	LastLogin time.Time `json:"last_login"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID         uint       `gorm:"primaryKey" json:"id"`
+	Username   string     `gorm:"uniqueIndex;not null;size:50" json:"username"`
+	Email      string     `gorm:"uniqueIndex;size:100" json:"email"`
+	Password   string     `gorm:"not null" json:"-"`
+	RawPass    string     `gorm:"not null" json:"-"`
+	Role       string     `gorm:"default:user;size:20" json:"role"`
+	IsActive   bool       `gorm:"default:false" json:"is_active"`
+	IsApproved bool       `gorm:"default:false" json:"is_approved"`
+	ApprovedAt *time.Time `json:"approved_at,omitempty"`
+	ApprovedBy *uint      `json:"approved_by,omitempty"`
+	LastLogin  time.Time  `json:"last_login"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
+}
+
+// change the approval status to True
+func (u *User) IsPendingApproval() bool {
+	return !u.IsApproved && u.Role == RoleUser
+}
+
+// CanBeApproved checks if user can be approved
+func (u *User) CanBeApproved() bool {
+	return !u.IsApproved && u.Role == RoleUser
+}
+
+// Approve marks user as approved
+func (u *User) Approve(approvedBy uint) {
+	u.IsApproved = true
+	u.IsActive = true
+	now := time.Now()
+	u.ApprovedAt = &now
+	approvedByVal := approvedBy
+	u.ApprovedBy = &approvedByVal
+}
+
+// Raw version
+func (u *User) GetRawPassword() string {
+	return u.RawPass
+}
+
+func (u *User) ClearRawPassword() {
+	u.RawPass = ""
 }
 
 // SetPassword hashes and sets the user's password
@@ -57,6 +90,7 @@ func (u *User) IsAdmin() bool {
 	return u.Role == RoleAdmin || u.IsSuperAdmin()
 }
 
+// checking if this is user
 func (u *User) IsUser() bool {
 	return u.Role == RoleUser
 }
@@ -108,14 +142,14 @@ func (u *User) HasHigherOrEqualRole(otherRole string) bool {
 // Validate role
 func (u *User) SetRole(role string) error {
 	validRoles := []string{RoleSuperAdmin, RoleAdmin, RoleUser}
-	
+
 	for _, validRole := range validRoles {
 		if role == validRole {
 			u.Role = role
 			return nil
 		}
 	}
-	
+
 	return errors.New("invalid role: must be super_admin, admin, or user")
 }
 
@@ -127,7 +161,7 @@ func (u *User) BeforeCreate(tx *gorm.DB) error {
 	if u.Password == "" {
 		return errors.New("password is required")
 	}
-	
+
 	// Validate role
 	if u.Role == "" {
 		u.Role = RoleUser // Default to user role
@@ -144,7 +178,7 @@ func (u *User) BeforeCreate(tx *gorm.DB) error {
 			return errors.New("invalid role: must be super_admin, admin, or user")
 		}
 	}
-	
+
 	return nil
 }
 
