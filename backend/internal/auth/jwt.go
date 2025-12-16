@@ -8,13 +8,14 @@ import (
 	"message-backend/internal/models"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/google/uuid"
 )
 
 type Claims struct {
-	UserID    uint   `json:"user_id"`
-	Username  string `json:"username"`
-	Role      string `json:"role"`
-	TokenType string `json:"token_type"` // "access" or "refresh"
+	UserID    uuid.UUID `json:"user_id"`
+	Username  string    `json:"username"`
+	Role      string    `json:"role"`
+	TokenType string    `json:"token_type"` // "access" or "refresh"
 	jwt.StandardClaims
 }
 
