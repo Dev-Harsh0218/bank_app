@@ -1,25 +1,45 @@
+import { useState, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Home, Users, UserCheck, MessageSquare, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { useState } from 'react';
+import type { UserRole } from '@/types/auth';
 
 export default function Sidebar() {
   const location = useLocation();
   const { user, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
 
-  const navItems = [
-    { path: '/', label: 'Dashboard', icon: Home },
-    { path: '/members', label: 'Members', icon: Users },
-    { path: '/customers', label: 'Customers', icon: UserCheck },
-    { path: '/messages', label: 'Messages', icon: MessageSquare },
-  ];
+  const role = user?.role as UserRole | undefined;
+
+  const navItems = useMemo(() => {
+    const items = [
+      { path: '/', label: 'Dashboard', icon: Home },            // everyone
+      { path: '/customers', label: 'Customers', icon: UserCheck }, // everyone
+      { path: '/messages', label: 'Messages', icon: MessageSquare }, // everyone
+    ];
+
+    // Only admin & super-admin see Members
+    if (role === 'admin' || role === 'super-admin') {
+      items.splice(1, 0, { path: '/members', label: 'Members', icon: Users });
+    }
+
+    return items;
+  }, [role]);
 
   const isActive = (path: string) => location.pathname === path;
 
   const handleLogout = () => {
     logout();
   };
+
+  const roleLabel =
+    role === 'admin'
+      ? 'Admin'
+      : role === 'super-admin'
+      ? 'Super Admin'
+      : role === 'member'
+      ? 'Member'
+      : 'User';
 
   return (
     <>
@@ -55,7 +75,7 @@ export default function Sidebar() {
             </div>
             <div>
               <h1 className="text-lg font-bold text-sidebar-foreground">Bank Dash</h1>
-              <p className="text-xs text-sidebar-foreground opacity-60">{user?.role}</p>
+              <p className="text-xs text-sidebar-foreground opacity-60">{roleLabel}</p>
             </div>
           </div>
         </div>

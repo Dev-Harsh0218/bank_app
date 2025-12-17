@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { User, UserRole, AuthContextType } from '@/types/auth';
+import { User, AuthContextType, AuthTokens } from '@/types/auth';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -9,24 +9,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return stored ? JSON.parse(stored) : null;
   });
 
-  const login = useCallback((email: string, _password: string, role: UserRole) => {
-    const newUser: User = {
-      id: Math.random().toString(36).substr(2, 9),
-      email,
-      name: email.split('@')[0],
-      role,
-    };
-    setUser(newUser);
-    localStorage.setItem('user', JSON.stringify(newUser));
+  const [tokens, setTokens] = useState<AuthTokens | null>(() => {
+    const stored = localStorage.getItem('tokens');
+    return stored ? JSON.parse(stored) : null;
+  });
+
+  const login = useCallback((userArg: User, tokensArg: AuthTokens | null = null) => {
+    setUser(userArg);
+    localStorage.setItem('user', JSON.stringify(userArg));
+
+    setTokens(tokensArg);
+    if (tokensArg) {
+      localStorage.setItem('tokens', JSON.stringify(tokensArg));
+    } else {
+      localStorage.removeItem('tokens');
+    }
   }, []);
 
   const logout = useCallback(() => {
     setUser(null);
+    setTokens(null);
     localStorage.removeItem('user');
+    localStorage.removeItem('tokens');
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        tokens,
+        login,
+        logout,
+        isAuthenticated: !!user && !!tokens,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

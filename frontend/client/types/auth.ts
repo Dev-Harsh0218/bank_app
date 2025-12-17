@@ -7,9 +7,16 @@ export interface User {
   role: UserRole;
 }
 
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+}
+
 export interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string, role: UserRole) => void;
+  tokens: AuthTokens | null;
+  login: (user: User, tokens?: AuthTokens | null) => void;
   logout: () => void;
   isAuthenticated: boolean;
 }

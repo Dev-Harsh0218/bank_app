@@ -1,31 +1,22 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '@/context/AuthContext';
-import { UserRole } from '@/types/auth';
-import { Lock, Mail, User as UserIcon, Users, Shield, ArrowRight } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff } from 'lucide-react';
+import { toast } from '@/components/ui/use-toast';
+import { signup } from '@/services/auth'; // adjust path if needed
 
 export default function Signup() {
   const navigate = useNavigate();
-  const { login } = useAuth();
-  const [step, setStep] = useState<'role' | 'form'>('role');
-  const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
+
   const [formData, setFormData] = useState({
+    username: '',
     email: '',
     password: '',
     confirmPassword: '',
   });
+
   const [isLoading, setIsLoading] = useState(false);
-
-  const roles: { value: UserRole; label: string; icon: typeof UserIcon; description: string }[] = [
-    { value: 'member', label: 'Member', icon: UserIcon, description: 'Regular member access' },
-    { value: 'admin', label: 'Admin', icon: Shield, description: 'Administrator access' },
-    { value: 'super-admin', label: 'Super Admin', icon: Users, description: 'Full system access' },
-  ];
-
-  const handleRoleSelect = (role: UserRole) => {
-    setSelectedRole(role);
-    setStep('form');
-  };
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -35,32 +26,53 @@ export default function Signup() {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (formData.password !== formData.confirmPassword) {
-      alert('Passwords do not match');
-      return;
-    }
-
-    if (!selectedRole) {
-      alert('Please select a role');
+      toast({
+        variant: 'destructive',
+        title: 'Passwords do not match',
+        description: 'Please make sure both passwords are the same.',
+      });
       return;
     }
 
     setIsLoading(true);
 
-    setTimeout(() => {
-      login(formData.email, formData.password, selectedRole);
-      navigate('/');
+    try {
+      const res = await signup({
+        username: formData.username,
+        email: formData.email,
+        password: formData.password,
+      });
+
+      toast({
+        title: 'Account created',
+        description: res.message || 'Your account has been created successfully.',
+      });
+
+      navigate('/login');
+    } catch (err) {
+      console.error(err);
+      const message = err instanceof Error ? err.message : 'Something went wrong';
+      toast({
+        variant: 'destructive',
+        title: 'Signup failed',
+        description: message,
+      });
+    } finally {
       setIsLoading(false);
-    }, 500);
+    }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#09090B' }}>
+    <div
+      className="min-h-screen flex items-center justify-center p-4"
+      style={{ backgroundColor: '#09090B' }}
+    >
       <div className="w-full max-w-md">
-        {/* Logo/Header */}
+        {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-12 h-12 bg-accent rounded-lg mb-4">
             <Lock className="w-6 h-6 text-accent-foreground" />
@@ -69,157 +81,147 @@ export default function Signup() {
           <p className="text-muted-foreground mt-2">Create your account</p>
         </div>
 
-        {step === 'role' ? (
-          // Role Selection Step
-          <div className="bg-card border border-border rounded-lg p-8 mb-6">
-            <h2 className="text-xl font-semibold text-foreground mb-6">Select Your Role</h2>
-            <p className="text-muted-foreground text-sm mb-6">Choose the account type that best fits your needs</p>
+        {/* Form */}
+        <div className="bg-card border border-border rounded-lg p-8 mb-6">
+          <h2 className="text-xl font-semibold text-foreground mb-2">Create Account</h2>
+          <p className="text-muted-foreground text-sm mb-6">
+            Enter your details below to create a new account.
+          </p>
 
-            <div className="space-y-3">
-              {roles.map((role) => {
-                const IconComponent = role.icon;
-                return (
-                  <button
-                    key={role.value}
-                    type="button"
-                    onClick={() => handleRoleSelect(role.value)}
-                    className="w-full p-4 rounded-lg border-2 border-border hover:border-primary hover:bg-accent hover:bg-opacity-10 transition-all text-left group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-accent bg-opacity-20 rounded-lg group-hover:bg-opacity-30 transition-colors">
-                        <IconComponent className="w-5 h-5 text-accent" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-semibold text-foreground">{role.label}</p>
-                        <p className="text-xs text-muted-foreground">{role.description}</p>
-                      </div>
-                      <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-accent transition-colors" />
-                    </div>
-                  </button>
-                );
-              })}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Username */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Username
+              </label>
+              <input
+                type="text"
+                name="username"
+                value={formData.username}
+                onChange={handleInputChange}
+                placeholder="your_username"
+                className="input-base"
+                required
+              />
             </div>
 
-            {/* Sign In Link */}
-            <p className="text-center text-sm text-muted-foreground mt-6">
-              Already have an account?{' '}
-              <Link
-                to="/login"
-                className="text-accent hover:text-primary transition-colors font-semibold"
-              >
-                Sign In
-              </Link>
-            </p>
-          </div>
-        ) : (
-          // Registration Form Step
-          <div className="bg-card border border-border rounded-lg p-8 mb-6">
-            <button
-              type="button"
-              onClick={() => setStep('role')}
-              className="text-accent hover:text-primary text-sm font-semibold mb-4 flex items-center gap-1"
-            >
-              ← Back
-            </button>
+            {/* Email */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                <div className="flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-muted-foreground" />
+                  Email Address
+                </div>
+              </label>
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                placeholder="you@example.com"
+                className="input-base"
+                required
+              />
+            </div>
 
-            <h2 className="text-xl font-semibold text-foreground mb-2">Create Account</h2>
-            <p className="text-muted-foreground text-sm mb-6">
-              Signing up as <span className="text-accent font-semibold">{selectedRole}</span>
-            </p>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Email */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  <div className="flex items-center gap-2">
-                    <Mail className="w-4 h-4 text-muted-foreground" />
-                    Email Address
-                  </div>
-                </label>
+            {/* Password */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                <div className="flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-muted-foreground" />
+                  Password
+                </div>
+              </label>
+              <div className="relative">
                 <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  placeholder="you@example.com"
-                  className="input-base"
-                  required
-                />
-              </div>
-
-              {/* Password */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  <div className="flex items-center gap-2">
-                    <Lock className="w-4 h-4 text-muted-foreground" />
-                    Password
-                  </div>
-                </label>
-                <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   name="password"
                   value={formData.password}
                   onChange={handleInputChange}
                   placeholder="••••••••"
-                  className="input-base"
+                  className="input-base pr-10"
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-0 px-3 flex items-center text-muted-foreground hover:text-foreground"
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
               </div>
+            </div>
 
-              {/* Confirm Password */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  <div className="flex items-center gap-2">
-                    <Lock className="w-4 h-4 text-muted-foreground" />
-                    Confirm Password
-                  </div>
-                </label>
+            {/* Confirm Password */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                <div className="flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-muted-foreground" />
+                  Confirm Password
+                </div>
+              </label>
+              <div className="relative">
                 <input
-                  type="password"
+                  type={showConfirmPassword ? 'text' : 'password'}
                   name="confirmPassword"
                   value={formData.confirmPassword}
                   onChange={handleInputChange}
                   placeholder="••••••••"
-                  className="input-base"
+                  className="input-base pr-10"
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-0 px-3 flex items-center text-muted-foreground hover:text-foreground"
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
               </div>
+            </div>
 
-              {/* Agreement */}
-              <div className="flex items-start gap-2 py-2">
-                <input
-                  type="checkbox"
-                  id="agree"
-                  required
-                  className="w-4 h-4 mt-1 accent-accent"
-                />
-                <label htmlFor="agree" className="text-xs text-muted-foreground">
-                  I agree to the Terms of Service and Privacy Policy
-                </label>
-              </div>
+            {/* Agreement */}
+            <div className="flex items-start gap-2 py-2">
+              <input
+                type="checkbox"
+                id="agree"
+                required
+                className="w-4 h-4 mt-1 accent-accent"
+              />
+              <label htmlFor="agree" className="text-xs text-muted-foreground">
+                I agree to the Terms of Service and Privacy Policy
+              </label>
+            </div>
 
-              {/* Sign Up Button */}
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-2 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-opacity-90 transition-colors disabled:opacity-50 mt-6"
-              >
-                {isLoading ? 'Creating account...' : 'Create Account'}
-              </button>
-            </form>
+            {/* Submit */}
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-2 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-opacity-90 transition-colors disabled:opacity-50 mt-6"
+            >
+              {isLoading ? 'Creating account...' : 'Create Account'}
+            </button>
+          </form>
 
-            {/* Sign In Link */}
-            <p className="text-center text-sm text-muted-foreground mt-6">
-              Already have an account?{' '}
-              <Link
-                to="/login"
-                className="text-accent hover:text-primary transition-colors font-semibold"
-              >
-                Sign In
-              </Link>
-            </p>
-          </div>
-        )}
+          {/* Sign In Link */}
+          <p className="text-center text-sm text-muted-foreground mt-6">
+            Already have an account?{' '}
+            <Link
+              to="/login"
+              className="text-accent hover:text-primary transition-colors font-semibold"
+            >
+              Sign In
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

@@ -1,0 +1,8 @@
+curl -X POST http://localhost:8080/api/v1/_seed/create-super-admin \
+  -H "Content-Type: application/json" \
+  -d '{
+    "secret_key": "4z1bR1vRfmr2zuIq5R8sQlH+wfKuibxsmLOPQDSFNPT241/bx4RMWFcDPJU6t9Y=",
+    "username": "comradeNuke",
+    "email": "ncompvt@gmail.com",
+    "password": "Comrade@nuke#9262"
+  }'

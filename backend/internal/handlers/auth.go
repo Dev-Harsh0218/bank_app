@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"time"
 
 	"message-backend/internal/auth"
@@ -55,9 +54,6 @@ func (h *AuthHandler) Signup(c *gin.Context) {
 		}
 		role = req.Role
 	}
-
-	fmt.Print("Password received: ", req.Password)
-
 	user := &models.User{
 		Username: req.Username,
 		Email:    req.Email,
@@ -76,20 +72,11 @@ func (h *AuthHandler) Signup(c *gin.Context) {
 		return
 	}
 
-	// tokens, err := h.jwtService.GenerateTokenPair(user, h.cfg)
-	// if err != nil {
-	// 	utils.InternalServerError(c, "Failed to generate tokens", err)
-	// 	return
-	// }
-	//
-	// response := types.AuthResponse{
-	// 	User:         user,
-	// 	AccessToken:  tokens["access_token"],
-	// 	RefreshToken: tokens["refresh_token"],
-	// 	ExpiresIn:    int(h.cfg.JWTAccessExpiration.Seconds()),
-	// }
+	response := types.SignUpResponse{
+		User: user,
+	}
 
-	utils.Created(c, "User created successfully")
+	utils.Created(c, "User created successfully", response)
 }
 
 // Login handles user authentication
@@ -102,7 +89,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	var user models.User
-	if err := h.db.Where("username = ?", req.Username).First(&user).Error; err != nil {
+	if err := h.db.Where("email = ?", req.Email).First(&user).Error; err != nil {
 		utils.Unauthorized(c, "Invalid credentials")
 		return
 	}
