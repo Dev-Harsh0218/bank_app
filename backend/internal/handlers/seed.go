@@ -2,11 +2,11 @@ package handlers
 
 import (
 	"fmt"
+
 	"message-backend/internal/config"
 	"message-backend/internal/database"
 	"message-backend/internal/models"
 	"message-backend/internal/utils"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
@@ -19,7 +19,6 @@ type SeedSuperAdminRequest struct {
 	Password  string `json:"password" binding:"required,min=8"`
 }
 
-// Add this new handler function
 // RecoverSuperAdmin sends existing super admin credentials via email
 func RecoverSuperAdmin(c *gin.Context) {
 	var req struct {
@@ -27,51 +26,41 @@ func RecoverSuperAdmin(c *gin.Context) {
 		Username  string `json:"username"`
 		Email     string `json:"email"`
 	}
-	
+
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		utils.BadRequest(c, "Invalid request data", err)
 		return
 	}
-	
+
 	// Custom validation: At least one of username or email is required
 	if req.Username == "" && req.Email == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Either username or email is required",
-			"details": "Provide at least one identifier to recover credentials",
-		})
+		utils.BadRequest(c, "Either username or email is required. Provide at least one identifier to recover credentials", nil)
 		return
 	}
-	
+
 	// Verify secret key
 	cfg := config.LoadConfig()
 	if req.SecretKey != cfg.SuperAdminSeedKey {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Invalid secret key"})
+		utils.Forbidden(c, "Invalid secret key")
 		return
 	}
-	
+
 	db := database.GetDB()
-	
+
 	// Find the user by username OR email
 	var user models.User
 	result := db.Where("username = ? OR email = ?", req.Username, req.Email).First(&user)
 	if result.Error != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error":    "User not found",
-			"username": req.Username,
-		})
+		utils.NotFound(c, "User not found")
 		return
 	}
-	
+
 	// Check if user is super admin
 	if user.Role != models.RoleSuperAdmin {
-		c.JSON(http.StatusForbidden, gin.H{
-			"error":    "User is not a super admin",
-			"username": req.Username,
-			"role":     user.Role,
-		})
+		utils.Forbidden(c, "User is not a super admin")
 		return
 	}
-	
+
 	// Offload email sending to goroutine for faster response
 	go func(u models.User) {
 		// Send credentials to the user's email (in background)
@@ -82,9 +71,8 @@ func RecoverSuperAdmin(c *gin.Context) {
 			fmt.Printf("✅ Recovery email sent to %s\n", u.Email)
 		}
 	}(user) // Pass user by value to avoid race conditions
-	
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Super admin credentials are being sent to your email",
+
+	utils.Success(c, "Super admin credentials are being sent to your email", gin.H{
 		"user": gin.H{
 			"id":       user.ID,
 			"username": user.Username,
@@ -102,14 +90,14 @@ func SeedSuperAdmin(c *gin.Context) {
 	var req SeedSuperAdminRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		utils.BadRequest(c, "Invalid request data", err)
 		return
 	}
 
 	// Verify secret key
 	cfg := config.LoadConfig()
 	if req.SecretKey != cfg.SuperAdminSeedKey {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Invalid secret key"})
+		utils.Forbidden(c, "Invalid secret key")
 		return
 	}
 
@@ -118,42 +106,33 @@ func SeedSuperAdmin(c *gin.Context) {
 	// Check if super admin already exists
 	var existingSuperAdmin models.User
 	result := db.Where("role = ?", models.RoleSuperAdmin).First(&existingSuperAdmin)
-
 	if result.Error == nil {
-		c.JSON(http.StatusConflict, gin.H{
-			"error": "Super admin already exists",
-			"existing_admin": gin.H{
-				"id":       existingSuperAdmin.ID,
-				"username": existingSuperAdmin.Username,
-				"email":    existingSuperAdmin.Email,
-			},
-		})
+		utils.Conflict(c, "Super admin already exists")
 		return
 	}
 
-	// Create super admin
+	// Create super admin - no approval needed for seed super admins
 	superAdmin := &models.User{
-		Username: req.Username,
-		Email:    req.Email,
-		Role:     models.RoleSuperAdmin,
-		RawPass:  req.Password,
-		IsActive: true,
+		Username:   req.Username,
+		Email:      req.Email,
+		Role:       models.RoleSuperAdmin,
+		RawPass:    req.Password,
+		IsActive:   true,
+		IsApproved: true, // Super admins are auto-approved
+		// ApprovedBy and ApprovedAt remain nil for seed super admins
 	}
 
 	if err := superAdmin.SetPassword(req.Password); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to set password: %v", err)})
+		utils.InternalServerError(c, fmt.Sprintf("Failed to set password: %v", err), err)
 		return
 	}
 
 	if err := db.Create(superAdmin).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": fmt.Sprintf("Failed to create super admin: %v", err),
-		})
+		utils.InternalServerError(c, fmt.Sprintf("Failed to create super admin: %v", err), err)
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"message": "Super admin created successfully",
+	utils.Created(c, "Super admin created successfully", gin.H{
 		"admin": gin.H{
 			"id":       superAdmin.ID,
 			"username": superAdmin.Username,
@@ -172,31 +151,31 @@ func ResetSuperAdmin(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		utils.BadRequest(c, "Invalid request data", err)
 		return
 	}
 
 	cfg := config.LoadConfig()
 	if req.SecretKey != cfg.SuperAdminSeedKey {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Invalid secret key"})
+		utils.Forbidden(c, "Invalid secret key")
 		return
 	}
 
 	db := database.GetDB()
+
 	var user models.User
 	if err := db.First(&user, req.UserID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		utils.NotFound(c, "User not found")
 		return
 	}
 
 	user.Role = models.RoleSuperAdmin
 	if err := db.Save(&user).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to promote user to super admin"})
+		utils.InternalServerError(c, "Failed to promote user to super admin", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "User promoted to super admin successfully",
+	utils.Success(c, "User promoted to super admin successfully", gin.H{
 		"admin": gin.H{
 			"id":       user.ID,
 			"username": user.Username,

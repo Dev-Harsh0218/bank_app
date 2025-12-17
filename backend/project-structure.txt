@@ -45,3 +45,377 @@
 └── tests/                      # Test files
     ├── integration/            # Integration tests
     └── unit/                   # Unit tests
+
+
+==========================================
+COMPLETE API ROUTES LIST WITH DESCRIPTIONS
+==========================================
+1. AUTHENTICATION ROUTES (✅ Implemented)
+------------------------------------------
+POST   /api/v1/auth/signup
+       Description: Register a new user account (creates regular user, requires admin approval)
+       Auth: Public
+       Body: {username, email, password}
+       Response: {user, access_token, refresh_token}
+
+POST   /api/v1/auth/login
+       Description: Authenticate user and get access/refresh tokens
+       Auth: Public
+       Body: {username, password}
+       Response: {user, access_token, refresh_token, expires_in}
+
+POST   /api/v1/auth/logout
+       Description: Logout user (client-side token removal)
+       Auth: Protected
+       Response: {message: "Logged out successfully"}
+
+POST   /api/v1/auth/refresh
+       Description: Refresh access token using refresh token
+       Auth: Public
+       Body: {refresh_token}
+       Response: {access_token, expires_in}
+
+GET    /api/v1/profile
+       Description: Get current authenticated user's profile
+       Auth: Protected
+       Response: {user data}
+
+2. USER MANAGEMENT ROUTES (Admin Only)
+------------------------------------------
+POST   /api/v1/users
+       Description: Create a new user with specific role (admin/super_admin/user)
+       Auth: Admin
+       Body: {username, email, password, role}
+       Response: {user data}
+
+GET    /api/v1/users
+       Description: List all users with pagination and filters
+       Auth: Admin
+       Query: ?page=1&limit=10&role=user&is_active=true
+       Response: {users[], total, page, limit}
+
+GET    /api/v1/users/:id
+       Description: Get specific user details by ID
+       Auth: Admin
+       Response: {user data}
+
+PUT    /api/v1/users/:id
+       Description: Update user information (username, email, etc.)
+       Auth: Admin
+       Body: {username?, email?, is_active?}
+       Response: {user data}
+
+DELETE /api/v1/users/:id
+       Description: Delete a user account
+       Auth: Admin
+       Response: {message: "User deleted successfully"}
+
+PUT    /api/v1/users/:id/role
+       Description: Update user role (super_admin/admin/user)
+       Auth: Admin
+       Body: {role}
+       Response: {user data}
+       Status: ✅ Implemented
+
+GET    /api/v1/users/pending-approval
+       Description: Get list of users waiting for admin approval
+       Auth: Admin
+       Response: {users[], count}
+       Status: ✅ Implemented
+
+PUT    /api/v1/users/:id/approve
+       Description: Approve a pending user account
+       Auth: Admin
+       Response: {user data, message}
+       Status: ⚠️ NEEDED
+
+DELETE /api/v1/users/:id/reject
+       Description: Reject and delete a pending user account
+       Auth: Admin
+       Response: {message: "User rejected successfully"}
+       Status: ⚠️ NEEDED
+
+PUT    /api/v1/users/:id/activate
+       Description: Activate or deactivate a user account
+       Auth: Admin
+       Body: {is_active: true/false}
+       Response: {user data}
+
+3. CUSTOMER ROUTES (Protected)
+------------------------------------------
+GET    /api/v1/customers
+       Description: List all customers with pagination
+       Auth: Protected
+       Query: ?page=1&limit=20&search=phone
+       Response: {customers[], total, page, limit}
+
+GET    /api/v1/customers/:id
+       Description: Get customer details with message history
+       Auth: Protected
+       Response: {customer data, messages[]}
+
+POST   /api/v1/customers
+       Description: Create a new customer (from Android app when receiving first message)
+       Auth: Protected
+       Body: {phone_number, full_name?, email?, device_id?}
+       Response: {customer data}
+
+PUT    /api/v1/customers/:id
+       Description: Update customer information
+       Auth: Protected
+       Body: {full_name?, email?, is_active?}
+       Response: {customer data}
+
+DELETE /api/v1/customers/:id
+       Description: Delete a customer and all their messages
+       Auth: Protected
+       Response: {message: "Customer deleted successfully"}
+
+GET    /api/v1/customers/search
+       Description: Search customers by phone number or name
+       Auth: Protected
+       Query: ?q=phone_or_name
+       Response: {customers[]}
+
+GET    /api/v1/customers/:id/stats
+       Description: Get customer message statistics
+       Auth: Protected
+       Response: {total_messages, unread_count, last_message_date, etc.}
+
+4. MESSAGE ROUTES (Protected)
+------------------------------------------
+GET    /api/v1/messages
+       Description: List all messages with pagination, filters, and sorting
+       Auth: Protected
+       Query: ?page=1&limit=50&customer_id=1&direction=incoming&status=unread&date_from=2025-01-01
+       Response: {messages[], total, page, limit}
+
+GET    /api/v1/messages/:id
+       Description: Get single message details
+       Auth: Protected
+       Response: {message data}
+
+POST   /api/v1/messages
+       Description: Create/receive a new message (from Android app)
+       Auth: Protected
+       Body: {customer_id, phone_number, content, direction, timestamp, contact_name?}
+       Response: {message data}
+
+PUT    /api/v1/messages/:id
+       Description: Update message (content, status, etc.)
+       Auth: Protected
+       Body: {content?, status?, is_important?}
+       Response: {message data}
+
+DELETE /api/v1/messages/:id
+       Description: Delete a message
+       Auth: Protected
+       Response: {message: "Message deleted successfully"}
+
+GET    /api/v1/messages/unread
+       Description: Get count of unread messages
+       Auth: Protected
+       Response: {unread_count, unread_messages[]}
+
+GET    /api/v1/messages/important
+       Description: Get all important/starred messages
+       Auth: Protected
+       Query: ?page=1&limit=20
+       Response: {messages[], total}
+
+PUT    /api/v1/messages/:id/read
+       Description: Mark message as read
+       Auth: Protected
+       Response: {message data}
+
+PUT    /api/v1/messages/:id/important
+       Description: Toggle message importance (star/unstar)
+       Auth: Protected
+       Response: {message data, is_important}
+
+GET    /api/v1/customers/:id/messages
+       Description: Get all messages for a specific customer
+       Auth: Protected
+       Query: ?page=1&limit=50&direction=incoming
+       Response: {messages[], total}
+
+POST   /api/v1/messages/sync
+       Description: Bulk sync messages from Android device
+       Auth: Protected
+       Body: {messages: [{phone_number, content, direction, timestamp, ...}]}
+       Response: {synced_count, created_count, updated_count}
+
+GET    /api/v1/messages/stats
+       Description: Get message statistics (total, by direction, by status, etc.)
+       Auth: Protected
+       Response: {total, incoming, outgoing, unread, important, etc.}
+
+5. ANDROID APP INTEGRATION ROUTES (Protected)
+------------------------------------------
+POST   /api/v1/sync/messages
+       Description: Sync messages from Android device to server
+       Auth: Protected
+       Body: {device_id, messages: [...]}
+       Response: {synced_count, status}
+
+POST   /api/v1/sync/customers
+       Description: Sync customers/contacts from Android device
+       Auth: Protected
+       Body: {device_id, customers: [...]}
+       Response: {synced_count, status}
+
+GET    /api/v1/sync/status
+       Description: Get last sync status and timestamp
+       Auth: Protected
+       Response: {last_sync, status, message_count}
+
+POST   /api/v1/device/register
+       Description: Register Android device for message syncing
+       Auth: Protected
+       Body: {device_id, device_name, android_version}
+       Response: {device_id, registered_at}
+
+GET    /api/v1/device/info
+       Description: Get registered device information
+       Auth: Protected
+       Response: {device data}
+
+6. ADMIN PANEL ROUTES (Admin Only)
+------------------------------------------
+GET    /api/v1/admin/dashboard
+       Description: Get dashboard statistics for admin panel
+       Auth: Admin
+       Response: {total_users, total_customers, total_messages, pending_approvals, etc.}
+
+GET    /api/v1/admin/stats
+       Description: Get detailed system statistics
+       Auth: Admin
+       Response: {users_stats, messages_stats, customers_stats, activity_stats}
+
+GET    /api/v1/admin/users
+       Description: Get all users with advanced filters (admin view)
+       Auth: Admin
+       Query: ?role=user&is_active=true&is_approved=false
+       Response: {users[], filters_applied}
+
+GET    /api/v1/admin/messages
+       Description: Get all messages across all customers (admin view)
+       Auth: Admin
+       Query: ?page=1&limit=100&date_from=2025-01-01
+       Response: {messages[], total}
+
+GET    /api/v1/admin/customers
+       Description: Get all customers with statistics (admin view)
+       Auth: Admin
+       Response: {customers[], total, stats}
+
+7. SEARCH & FILTER ROUTES (Protected)
+------------------------------------------
+GET    /api/v1/search/messages
+       Description: Search messages by content, phone number, or contact name
+       Auth: Protected
+       Query: ?q=search_term&page=1&limit=20
+       Response: {messages[], total}
+
+GET    /api/v1/search/customers
+       Description: Search customers by phone number or name
+       Auth: Protected
+       Query: ?q=search_term
+       Response: {customers[]}
+
+GET    /api/v1/filter/messages
+       Description: Filter messages by date range, direction, status, customer
+       Auth: Protected
+       Query: ?date_from=2025-01-01&date_to=2025-12-31&direction=incoming&status=unread
+       Response: {messages[], total}
+
+8. UTILITY ROUTES
+------------------------------------------
+GET    /health
+       Description: Health check endpoint
+       Auth: Public
+       Response: {status: "healthy", timestamp, version}
+       Status: ✅ Implemented
+
+GET    /api/v1/status
+       Description: API status and information
+       Auth: Public
+       Response: {status: "operational", message}
+       Status: ✅ Implemented
+
+GET    /
+       Description: API root endpoint with available routes
+       Auth: Public
+       Response: {message, version, endpoints[]}
+       Status: ✅ Implemented
+
+GET    /_seed/health
+       Description: Check if seed endpoints are available
+       Auth: Public
+       Response: {status: "available"}
+       Status: ✅ Implemented
+
+9. HIDDEN SEED ROUTES (Secret Key Only)
+------------------------------------------
+POST   /_seed/create-super-admin
+       Description: Create initial super admin user (requires secret key)
+       Auth: Secret Key Only
+       Body: {secret_key, username, email, password}
+       Response: {admin data, warning}
+       Status: ✅ Implemented
+
+POST   /_seed/recover-super-admin
+       Description: Recover super admin credentials via email (requires secret key)
+       Auth: Secret Key Only
+       Body: {secret_key, username?, email?}
+       Response: {message, user data, email_sent_to}
+       Status: ✅ Implemented
+
+POST   /_seed/reset-admin
+       Description: Promote existing user to super admin (requires secret key)
+       Auth: Secret Key Only
+       Body: {secret_key, user_id}
+       Response: {admin data, message}
+       Status: ✅ Implemented
+
+==========================================
+PRIORITY IMPLEMENTATION ORDER
+==========================================
+
+PHASE 1 - CORE FUNCTIONALITY (DO FIRST)
+------------------------------------------
+1. PUT    /api/v1/users/:id/approve          - Approve pending users
+2. DELETE /api/v1/users/:id/reject           - Reject pending users
+3. Database migrations                        - Add Customer & Message models
+4. POST   /api/v1/messages                   - Receive messages from Android
+5. GET    /api/v1/messages                   - List messages
+6. GET    /api/v1/messages/:id               - Get single message
+
+PHASE 2 - CUSTOMER MANAGEMENT
+------------------------------------------
+7. GET    /api/v1/customers                  - List customers
+8. POST   /api/v1/customers                  - Create customer
+9. GET    /api/v1/customers/:id              - Get customer details
+10. GET   /api/v1/customers/:id/messages     - Get customer messages
+
+PHASE 3 - ADVANCED FEATURES
+------------------------------------------
+11. PUT   /api/v1/messages/:id/read          - Mark as read
+12. PUT   /api/v1/messages/:id/important     - Toggle importance
+13. GET   /api/v1/messages/unread            - Unread count
+14. GET   /api/v1/search/messages           - Search messages
+15. POST  /api/v1/messages/sync              - Bulk sync
+
+PHASE 4 - ADMIN PANEL
+------------------------------------------
+16. GET   /api/v1/admin/dashboard            - Dashboard stats
+17. GET   /api/v1/admin/stats                - System statistics
+
+==========================================
+ROUTE SUMMARY
+==========================================
+Total Routes: ~45
+Already Implemented: 9
+High Priority: 8
+Medium Priority: 15
+Low Priority: 13+

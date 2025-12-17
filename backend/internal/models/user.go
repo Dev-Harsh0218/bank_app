@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -18,7 +19,7 @@ const (
 
 // User represents administrators who can access the management panel
 type User struct {
-	ID         uint       `gorm:"primaryKey" json:"id"`
+	ID         uuid.UUID  `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
 	Username   string     `gorm:"uniqueIndex;not null;size:50" json:"username"`
 	Email      string     `gorm:"uniqueIndex;size:100" json:"email"`
 	Password   string     `gorm:"not null" json:"-"`
@@ -27,7 +28,7 @@ type User struct {
 	IsActive   bool       `gorm:"default:false" json:"is_active"`
 	IsApproved bool       `gorm:"default:false" json:"is_approved"`
 	ApprovedAt *time.Time `json:"approved_at,omitempty"`
-	ApprovedBy *uint      `json:"approved_by,omitempty"`
+	ApprovedBy *uuid.UUID `json:"approved_by,omitempty"`
 	LastLogin  time.Time  `json:"last_login"`
 	CreatedAt  time.Time  `json:"created_at"`
 	UpdatedAt  time.Time  `json:"updated_at"`
@@ -44,7 +45,7 @@ func (u *User) CanBeApproved() bool {
 }
 
 // Approve marks user as approved
-func (u *User) Approve(approvedBy uint) {
+func (u *User) Approve(approvedBy uuid.UUID) {
 	u.IsApproved = true
 	u.IsActive = true
 	now := time.Now()

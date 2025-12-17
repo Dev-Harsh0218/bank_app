@@ -16,6 +16,7 @@ import (
 	"message-backend/internal/handlers"
 	"message-backend/internal/middleware"
 	"message-backend/internal/models"
+	"message-backend/internal/utils" // Add this import
 
 	// external modules
 	"github.com/gin-gonic/gin"
@@ -39,7 +40,11 @@ func main() {
 	defer database.CloseDB()
 
 	// Auto migrate models
-	if err := db.AutoMigrate(&models.User{}); err != nil {
+	if err := db.AutoMigrate(
+		&models.User{},
+		&models.Customer{},
+		&models.Message{}, // Add Message model
+	); err != nil {
 		log.Fatalf("❌ Failed to migrate database: %v", err)
 	}
 
@@ -65,7 +70,6 @@ func main() {
 		log.Printf("🚀 Server starting on %s:%s", cfg.ServerHost, cfg.ServerPort)
 		log.Printf("📊 Environment: %s", cfg.AppEnv)
 		log.Printf("🔧 Debug mode: %t", cfg.AppDebug)
-
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("❌ Failed to start server: %v", err)
 		}
@@ -75,13 +79,11 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-
 	log.Println("🛑 Shutting down server...")
 
 	// Graceful shutdown with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
 	if err := server.Shutdown(ctx); err != nil {
 		log.Fatalf("❌ Server forced to shutdown: %v", err)
 	}
@@ -95,6 +97,9 @@ func setupRoutes(router *gin.Engine) {
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler()
+	adminHandler := handlers.NewAdminHandler()
+	customerHandler := handlers.NewCustomerHandler()
+	messageHandler := handlers.NewMessageHandler() // Add message handler
 	authMiddleware := middleware.NewAuthMiddleware()
 
 	// ========================
@@ -104,13 +109,12 @@ func setupRoutes(router *gin.Engine) {
 	router.POST("/_seed/recover-super-admin", handlers.RecoverSuperAdmin)
 	router.POST("/_seed/reset-admin", handlers.ResetSuperAdmin)
 	router.GET("/_seed/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "seed_endpoints_available"})
+		utils.Success(c, "Seed endpoints are available", gin.H{"available": true})
 	})
 
 	// Health check
 	router.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"status":    "healthy",
+		utils.Success(c, "Server is healthy", gin.H{
 			"timestamp": time.Now().UTC(),
 			"version":   "1.0.0",
 		})
@@ -139,16 +143,46 @@ func setupRoutes(router *gin.Engine) {
 			admin := protected.Group("")
 			admin.Use(authMiddleware.RoleMiddleware(models.RoleAdmin))
 			{
-				admin.POST("/users", authHandler.CreateUser)
-				admin.PUT("/users/:id/role", authHandler.UpdateUserRole)
+				admin.POST("/users", adminHandler.CreateUser)
+				admin.GET("/users/pending-approval", adminHandler.GetPendingUsers)
+				admin.PUT("/users/:id/role", adminHandler.UpdateUserRole)
+				admin.PUT("/users/:id/approve", adminHandler.ApproveUser)
+				admin.DELETE("/users/:id/reject", adminHandler.RejectUser)
 			}
-
-			// Add more protected routes here later
 		}
+
+		// ========================
+		// CUSTOMER ROUTES
+		// ========================
+		// Public customer routes (for Android app)
+		apiV1.POST("/customers", customerHandler.CreateCustomer)
+		apiV1.GET("/customers/profile", customerHandler.GetMyProfile)
+		apiV1.PUT("/customers/profile", customerHandler.UpdateMyProfile)
+
+		// Admin customer management routes
+		adminCustomer := apiV1.Group("/customers")
+		adminCustomer.Use(authMiddleware.JWTAuth(), authMiddleware.RoleMiddleware(models.RoleAdmin))
+		{
+			adminCustomer.GET("", customerHandler.GetCustomers)
+			adminCustomer.GET("/:id", customerHandler.GetCustomer)
+			adminCustomer.PUT("/:id", customerHandler.UpdateCustomer)
+			adminCustomer.DELETE("/:id", customerHandler.DeleteCustomer)
+		}
+
+		// ========================
+		// MESSAGE ROUTES
+		// ========================
+		// Public message routes (for Android app)
+		apiV1.POST("/messages", messageHandler.CreateMessage)
+		apiV1.GET("/messages", messageHandler.GetMessages)
+		apiV1.GET("/messages/stats", messageHandler.GetMessageStats)
+		apiV1.GET("/messages/:id", messageHandler.GetMessage)
+		apiV1.PUT("/messages/:id", messageHandler.UpdateMessage)
+		apiV1.DELETE("/messages/:id", messageHandler.DeleteMessage)
 
 		// Public status
 		apiV1.GET("/status", func(c *gin.Context) {
-			c.JSON(200, gin.H{"message": "API is running"})
+			utils.Success(c, "API is running", gin.H{"status": "operational"})
 		})
 
 		apiV1.GET("/_func-test", handlers.NewTestHandler().TestEndpoint)
@@ -156,18 +190,23 @@ func setupRoutes(router *gin.Engine) {
 
 	// Default route
 	router.GET("/", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "Bank App Backend API",
+		utils.Success(c, "Bank App Backend API", gin.H{
 			"version": "1.0.0",
 			"endpoints": []string{
 				"/health",
 				"/api/v1/auth/signup",
 				"/api/v1/auth/login",
 				"/api/v1/auth/logout",
+				"/api/v1/auth/refresh",
 				"/api/v1/profile",
 				"/api/v1/users",
+				"/api/v1/users/pending-approval",
+				"/api/v1/customers",
+				"/api/v1/customers/profile",
+				"/api/v1/messages",         // Add message endpoints
+				"/api/v1/messages/stats",   // Add message stats
 				"/api/v1/status",
-				"/_seed/health", // Hidden endpoint
+				"/_seed/health",
 			},
 		})
 	})

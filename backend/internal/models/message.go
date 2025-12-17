@@ -3,43 +3,19 @@ package models
 import (
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
-// MessageDirection represents the direction of a message
-type MessageDirection string
-
-const (
-	DirectionIncoming MessageDirection = "incoming"
-	DirectionOutgoing MessageDirection = "outgoing"
-)
-
-// MessageStatus represents the delivery status of a message
-type MessageStatus string
-
-const (
-	StatusSent      MessageStatus = "sent"
-	StatusDelivered MessageStatus = "delivered"
-	StatusFailed    MessageStatus = "failed"
-	StatusRead      MessageStatus = "read"
-)
-
-// Message represents an SMS message belonging to a customer
+// Message represents an incoming SMS message belonging to a customer
 type Message struct {
-	ID          uint             `gorm:"primaryKey" json:"id"`
-	CustomerID  uint             `gorm:"not null;index" json:"customer_id"` // Links to Customer
-	PhoneNumber string           `gorm:"not null;size:20" json:"phone_number"`
-	ContactName string           `gorm:"size:100" json:"contact_name"`
-	Content     string           `gorm:"not null;type:text" json:"content"`
-	Direction   MessageDirection `gorm:"not null;type:varchar(10)" json:"direction"`
-	Status      MessageStatus    `gorm:"default:'sent';size:20" json:"status"`
-	Timestamp   time.Time        `gorm:"not null;index" json:"timestamp"`
-	IsImportant bool             `gorm:"default:false" json:"is_important"`
-	CreatedAt   time.Time        `json:"created_at"`
-	UpdatedAt   time.Time        `json:"updated_at"`
-
-	// Associations - Links to Customer
-	Customer Customer `gorm:"foreignKey:CustomerID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"customer"`
+	ID         uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	CustomerID uuid.UUID `gorm:"type:uuid;not null;index" json:"customer_id"` // Links to Customer
+	Content    string    `gorm:"not null;type:text" json:"content"`           // The SMS message content
+	Timestamp  time.Time `gorm:"not null;index" json:"timestamp"`             // When message was received
+	Starred    bool      `gorm:"default:false" json:"starred"`                // User can star important messages
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // BeforeCreate GORM hook to set default timestamp
@@ -50,30 +26,38 @@ func (m *Message) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
-// IsIncoming checks if the message is incoming
-func (m *Message) IsIncoming() bool {
-	return m.Direction == DirectionIncoming
-}
-
-// IsOutgoing checks if the message is outgoing
-func (m *Message) IsOutgoing() bool {
-	return m.Direction == DirectionOutgoing
-}
-
-// MarkAsDelivered updates message status to delivered
-func (m *Message) MarkAsDelivered() {
-	m.Status = StatusDelivered
+// ToggleStar toggles the starred status of the message
+func (m *Message) ToggleStar() {
+	m.Starred = !m.Starred
 	m.UpdatedAt = time.Now()
 }
 
-// MarkAsRead updates message status to read
-func (m *Message) MarkAsRead() {
-	m.Status = StatusRead
+// Star marks the message as starred
+func (m *Message) Star() {
+	m.Starred = true
 	m.UpdatedAt = time.Now()
 }
 
-// ToggleImportance marks/unmarks message as important
-func (m *Message) ToggleImportance() {
-	m.IsImportant = !m.IsImportant
+// Unstar removes the star from the message
+func (m *Message) Unstar() {
+	m.Starred = false
 	m.UpdatedAt = time.Now()
+}
+
+// IsStarred checks if the message is starred
+func (m *Message) IsStarred() bool {
+	return m.Starred
+}
+
+// GetPreview returns a short preview of the message content
+func (m *Message) GetPreview(length int) string {
+	if len(m.Content) <= length {
+		return m.Content
+	}
+	return m.Content[:length] + "..."
+}
+
+// IsRecent checks if message is from the last 24 hours
+func (m *Message) IsRecent() bool {
+	return time.Since(m.Timestamp) < 24*time.Hour
 }

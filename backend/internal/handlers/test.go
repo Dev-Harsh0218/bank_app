@@ -1,41 +1,38 @@
 package handlers
 
 import (
-	"message-backend/internal/utils"
 	"net/http"
-
+	"message-backend/internal/database"
+	"message-backend/internal/models"
 	"github.com/gin-gonic/gin"
 )
 
-// TestHandler provides a simple test endpoint
 type TestHandler struct{}
 
-func NewTestHandler() *TestHandler {
-	return &TestHandler{}
-}
+func NewTestHandler() *TestHandler { return &TestHandler{} }
 
-// TestEndpoint is a sandbo for testing any code
+// TestEndpoint is a sandbox for testing any code
 func (h *TestHandler) TestEndpoint(c *gin.Context) {
 	// =========================
 	// Paste Your test code here for testing
 	// =========================
-	err := utils.SendSuperAdminCredentials(
-		"testuser",
-		"test@example.com",
-		"testpassword 123!",
-	)
+	var updatedUser models.User
+	err := database.GetDB().Where("is_approved = ? AND role = ?", false, models.RoleUser).Find(&updatedUser).Error
 
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
 			"error":   err.Error(),
-			"message": "Email test failed - check SMTP configuration",
-			"details": "Make sure SMTP settings are correct in .env file",
+			"message": "Fetching users failed",
+			"details": "A problem occurred while querying for users waiting for approval.",
 		})
+		return
 	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"status":  "success",
-		"message": "Test completed successfully",
-		"details": "Check your email inbox for the test message",
+		"status":   "success",
+		"message":  "Test completed successfully",
+		"details":  "All users waiting for approval are listed below.",
+        "data": gin.H{"updatedUser": updatedUser },
 	})
 }
