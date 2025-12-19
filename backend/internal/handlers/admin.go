@@ -1,13 +1,15 @@
 package handlers
 
 import (
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
 	"message-backend/internal/database"
 	"message-backend/internal/models"
 	"message-backend/internal/types"
-	"message-backend/internal/utils" 
+	"message-backend/internal/utils"
 )
 
 type AdminHandler struct {
@@ -79,6 +81,87 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 	}
 
 	utils.Created(c, "User created successfully by "+user.Username, newUser)
+}
+
+// GetAllUsers returns all users with optional filtering (admin only)
+func (h *AdminHandler) GetAllUsers(c *gin.Context) {
+	currentUser, exists := c.Get("user")
+	if !exists {
+		utils.Unauthorized(c, "User not found in context")
+		return
+	}
+
+	admin, ok := currentUser.(*models.User)
+	if !ok {
+		utils.InternalServerError(c, "Invalid user type", nil)
+		return
+	}
+
+	if !admin.CanManageUsers() {
+		utils.Forbidden(c, "Insufficient permissions to view users")
+		return
+	}
+
+	// Filtering parameters
+	role := c.Query("role")
+	isActive := c.Query("is_active")
+	isApproved := c.Query("is_approved")
+	search := c.Query("search") // Search in username or email
+
+	// Build query
+	query := h.db.Model(&models.User{})
+
+	// Exclude the current user from results
+	query = query.Where("id != ?", admin.ID)
+
+	// If current user is NOT super admin, exclude super_admin users from results
+	if !admin.IsSuperAdmin() {
+		query = query.Where("role != ?", models.RoleSuperAdmin)
+	}
+
+	if role != "" {
+		query = query.Where("role = ?", role)
+	}
+
+	if isActive != "" {
+		active, _ := strconv.ParseBool(isActive)
+		query = query.Where("is_active = ?", active)
+	}
+
+	if isApproved != "" {
+		approved, _ := strconv.ParseBool(isApproved)
+		query = query.Where("is_approved = ?", approved)
+	}
+
+	if search != "" {
+		query = query.Where("username ILIKE ? OR email ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+
+	// Get all matching users
+	var users []models.User
+	if err := query.Order("created_at DESC").Find(&users).Error; err != nil {
+		utils.InternalServerError(c, "Failed to fetch users", err)
+		return
+	}
+
+	// Get total count
+	var totalCount int64
+	query.Count(&totalCount)
+
+	response := gin.H{
+		"users":       users,
+		"total_count": totalCount,
+		"filters": gin.H{
+			"role":        role,
+			"is_active":   isActive,
+			"is_approved": isApproved,
+			"search":      search,
+		},
+		"viewer_role": admin.Role, // Include viewer's role for transparency
+		"viewer_id":   admin.ID,   // Include viewer's ID for reference
+	}
+
+	utils.Success(c, "Users retrieved successfully", response)
 }
 
 // UpdateUserRole allows admins to update user roles
@@ -242,7 +325,8 @@ func (h *AdminHandler) RejectUser(c *gin.Context) {
 	}
 
 	var targetUser models.User
-	if err := h.db.First(&targetUser, userID).Error; err != nil {
+	// Fix: Use WHERE clause instead of direct parameter for proper UUID handling
+	if err := h.db.Where("id = ?", userID).First(&targetUser).Error; err != nil {
 		utils.NotFound(c, "User not found")
 		return
 	}

@@ -16,7 +16,7 @@ import (
 	"message-backend/internal/handlers"
 	"message-backend/internal/middleware"
 	"message-backend/internal/models"
-	"message-backend/internal/utils" // Add this import
+	"message-backend/internal/utils"
 
 	// external modules
 	"github.com/gin-gonic/gin"
@@ -99,7 +99,7 @@ func setupRoutes(router *gin.Engine) {
 	authHandler := handlers.NewAuthHandler()
 	adminHandler := handlers.NewAdminHandler()
 	customerHandler := handlers.NewCustomerHandler()
-	messageHandler := handlers.NewMessageHandler() // Add message handler
+	messageHandler := handlers.NewMessageHandler()
 	authMiddleware := middleware.NewAuthMiddleware()
 
 	// ========================
@@ -132,22 +132,32 @@ func setupRoutes(router *gin.Engine) {
 			auth.POST("/refresh", authHandler.RefreshToken)
 		}
 
-		// Protected routes
+		// Protected routes (authenticated users)
 		protected := apiV1.Group("")
 		protected.Use(authMiddleware.JWTAuth())
 		{
 			// User profile
 			protected.GET("/profile", authHandler.GetProfile)
 
+			// Customer routes for authenticated users
+			protected.GET("/customers", customerHandler.GetCustomers)
+
 			// Admin only routes
 			admin := protected.Group("")
 			admin.Use(authMiddleware.RoleMiddleware(models.RoleAdmin))
 			{
+				// User management
 				admin.POST("/users", adminHandler.CreateUser)
+				admin.GET("/users", adminHandler.GetAllUsers)
 				admin.GET("/users/pending-approval", adminHandler.GetPendingUsers)
 				admin.PUT("/users/:id/role", adminHandler.UpdateUserRole)
 				admin.PUT("/users/:id/approve", adminHandler.ApproveUser)
 				admin.DELETE("/users/:id/reject", adminHandler.RejectUser)
+
+				// Admin customer management (specific customer operations)
+				admin.GET("/customers/:id", customerHandler.GetCustomer)
+				admin.PUT("/customers/:id", customerHandler.UpdateCustomer)
+				admin.DELETE("/customers/:id", customerHandler.DeleteCustomer)
 			}
 		}
 
@@ -156,17 +166,13 @@ func setupRoutes(router *gin.Engine) {
 		// ========================
 		// Public customer routes (for Android app)
 		apiV1.POST("/customers", customerHandler.CreateCustomer)
-		apiV1.GET("/customers/profile", customerHandler.GetMyProfile)
-		apiV1.PUT("/customers/profile", customerHandler.UpdateMyProfile)
 
-		// Admin customer management routes
-		adminCustomer := apiV1.Group("/customers")
-		adminCustomer.Use(authMiddleware.JWTAuth(), authMiddleware.RoleMiddleware(models.RoleAdmin))
+		// Protected customer profile routes (authenticated users managing their own profile)
+		protectedCustomer := apiV1.Group("/customers")
+		protectedCustomer.Use(authMiddleware.JWTAuth())
 		{
-			adminCustomer.GET("", customerHandler.GetCustomers)
-			adminCustomer.GET("/:id", customerHandler.GetCustomer)
-			adminCustomer.PUT("/:id", customerHandler.UpdateCustomer)
-			adminCustomer.DELETE("/:id", customerHandler.DeleteCustomer)
+			protectedCustomer.GET("/profile", customerHandler.GetMyProfile)
+			protectedCustomer.PUT("/profile", customerHandler.UpdateMyProfile)
 		}
 
 		// ========================
@@ -201,10 +207,10 @@ func setupRoutes(router *gin.Engine) {
 				"/api/v1/profile",
 				"/api/v1/users",
 				"/api/v1/users/pending-approval",
-				"/api/v1/customers",
-				"/api/v1/customers/profile",
-				"/api/v1/messages",         // Add message endpoints
-				"/api/v1/messages/stats",   // Add message stats
+				"/api/v1/customers",         // All authenticated users
+				"/api/v1/customers/profile", // User's own profile
+				"/api/v1/messages",
+				"/api/v1/messages/stats",
 				"/api/v1/status",
 				"/_seed/health",
 			},
