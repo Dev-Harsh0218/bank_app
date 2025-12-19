@@ -26,12 +26,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const updateTokens = useCallback((newTokens: { accessToken: string; refreshToken: string; expiresIn: number }) => {
+    const authTokens: AuthTokens = {
+      accessToken: newTokens.accessToken,
+      refreshToken: newTokens.refreshToken,
+      expiresIn: newTokens.expiresIn,
+    };
+    setTokens(authTokens);
+    localStorage.setItem('tokens', JSON.stringify(authTokens));
+  }, []);
+
   const logout = useCallback(() => {
     setUser(null);
     setTokens(null);
     localStorage.removeItem('user');
     localStorage.removeItem('tokens');
   }, []);
+
+  const getTokens = useCallback(() => {
+    return tokens ? {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    } : null;
+  }, [tokens]);
 
   return (
     <AuthContext.Provider
@@ -40,6 +57,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         tokens,
         login,
         logout,
+        updateTokens,
+        getTokens,
         isAuthenticated: !!user && !!tokens,
       }}
     >

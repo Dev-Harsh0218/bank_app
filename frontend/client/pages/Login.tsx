@@ -27,7 +27,7 @@ export default function Login() {
 
       const roleMap: Record<string, UserRole> = {
         admin: 'admin',
-        'super-admin': 'super-admin',
+        'super_admin': 'super_admin',
         user: 'member',
       };
       const role: UserRole = roleMap[apiUser.role] ?? 'member';

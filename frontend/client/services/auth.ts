@@ -93,3 +93,39 @@ export async function loginApi(
 
   return data;
 }
+
+// Refresh token interfaces and API
+export interface RefreshTokenPayload {
+  refresh_token: string;
+}
+
+export interface RefreshTokenApiResponse {
+  status: string;
+  message: string;
+  data?: {
+    access_token: string;
+    expires_in: number;
+  };
+}
+
+export async function refreshTokenApi(
+  payload: RefreshTokenPayload,
+): Promise<RefreshTokenApiResponse> {
+  const res = await fetch("http://localhost:8080/api/v1/auth/refresh", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const data = (await res.json().catch(() => null)) as RefreshTokenApiResponse | null;
+
+  if (!data) {
+    throw new Error("Failed to refresh token");
+  }
+
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to refresh token");
+  }
+
+  return data;
+}

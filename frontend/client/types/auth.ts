@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'super-admin' | 'member';
+export type UserRole = "admin" | "super_admin" | "member";
 
 export interface User {
   id: string;
@@ -18,5 +18,7 @@ export interface AuthContextType {
   tokens: AuthTokens | null;
   login: (user: User, tokens?: AuthTokens | null) => void;
   logout: () => void;
+  updateTokens: (tokens: { accessToken: string; refreshToken: string; expiresIn: number }) => void;
+  getTokens: () => { accessToken: string; refreshToken: string } | null;
   isAuthenticated: boolean;
 }

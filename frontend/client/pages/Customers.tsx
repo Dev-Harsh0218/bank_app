@@ -2,83 +2,101 @@ import {
   Search,
   Plus,
   MoreVertical,
+  Users,
+  UserCheck,
   DollarSign,
-  TrendingUp,
 } from "lucide-react";
 import Layout from "@/components/Layout";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useAuth } from "@/context/AuthContext";
+import { getCustomers, Customer } from "@/services/customer";
+import { toast } from "@/components/ui/use-toast";
 
 export default function Customers() {
+  const { getTokens, updateTokens, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const customers = [
-    {
-      id: "1",
-      name: "Alice Johnson",
-      email: "alice@example.com",
-      phone: "+1 (555) 123-4567",
-      balance: "$15,240.50",
-      accountType: "Premium",
-      joinDate: "2023-06-15",
-      status: "Active",
-    },
-    {
-      id: "2",
-      name: "Bob Smith",
-      email: "bob@example.com",
-      phone: "+1 (555) 234-5678",
-      balance: "$8,920.00",
-      accountType: "Standard",
-      joinDate: "2023-08-20",
-      status: "Active",
-    },
-    {
-      id: "3",
-      name: "Carol Davis",
-      email: "carol@example.com",
-      phone: "+1 (555) 345-6789",
-      balance: "$3,100.75",
-      accountType: "Starter",
-      joinDate: "2024-01-10",
-      status: "Inactive",
-    },
-    {
-      id: "4",
-      name: "David Wilson",
-      email: "david@example.com",
-      phone: "+1 (555) 456-7890",
-      balance: "$22,450.00",
-      accountType: "Premium",
-      joinDate: "2023-05-05",
-      status: "Active",
-    },
-    {
-      id: "5",
-      name: "Emma Brown",
-      email: "emma@example.com",
-      phone: "+1 (555) 567-8901",
-      balance: "$11,890.25",
-      accountType: "Standard",
-      joinDate: "2023-09-12",
-      status: "Active",
-    },
-    {
-      id: "6",
-      name: "Frank Miller",
-      email: "frank@example.com",
-      phone: "+1 (555) 678-9012",
-      balance: "$5,670.00",
-      accountType: "Standard",
-      joinDate: "2023-11-08",
-      status: "Active",
-    },
-  ];
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      if (!getTokens) {
+        setError("Authentication required");
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        setError(null);
+        const response = await getCustomers(getTokens, updateTokens, logout);
+        setCustomers(response.data);
+      } catch (err) {
+        console.error("Failed to fetch customers:", err);
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to fetch customers";
+        setError(errorMessage);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: errorMessage,
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchCustomers();
+  }, [getTokens, updateTokens, logout]);
 
   const filteredCustomers = customers.filter(
     (customer) =>
-      customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      customer.email.toLowerCase().includes(searchQuery.toLowerCase()),
+      customer.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      customer.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      customer.phone_number.includes(searchQuery),
   );
+
+  // Calculate totals for stats
+  const totalCustomers = customers.length;
+  const activeCustomers = customers.filter((c) => c.is_active).length;
+  const totalCreditLimit = customers.reduce((sum, c) => sum + c.total_limit, 0);
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="p-3 sm:p-4 md:p-8">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Loading customers...</p>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (error) {
+    return (
+      <Layout>
+        <div className="p-3 sm:p-4 md:p-8">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-center">
+              <p className="text-red-400 mb-4">Failed to load customers</p>
+              <p className="text-muted-foreground text-sm">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-opacity-90 transition-colors"
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -110,11 +128,11 @@ export default function Customers() {
                   Total Customers
                 </p>
                 <p className="text-2xl font-bold text-foreground">
-                  {customers.length}
+                  {totalCustomers}
                 </p>
               </div>
               <div className="p-2 bg-blue-950 bg-opacity-30 rounded-lg">
-                <DollarSign className="w-5 h-5 text-blue-400" />
+                <Users className="w-5 h-5 text-blue-400" />
               </div>
             </div>
           </div>
@@ -122,14 +140,29 @@ export default function Customers() {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">
-                  Active Accounts
+                  Active Customers
                 </p>
                 <p className="text-2xl font-bold text-foreground">
-                  {customers.filter((c) => c.status === "Active").length}
+                  {activeCustomers}
+                </p>
+              </div>
+              <div className="p-2 bg-green-950 bg-opacity-30 rounded-lg">
+                <UserCheck className="w-5 h-5 text-green-400" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-card border border-border rounded-lg p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">
+                  Total Credit Limit
+                </p>
+                <p className="text-2xl font-bold text-foreground">
+                  ${totalCreditLimit.toLocaleString()}
                 </p>
               </div>
               <div className="p-2 bg-purple-950 bg-opacity-30 rounded-lg">
-                <TrendingUp className="w-5 h-5 text-purple-400" />
+                <DollarSign className="w-5 h-5 text-purple-400" />
               </div>
             </div>
           </div>
@@ -141,7 +174,7 @@ export default function Customers() {
             <Search className="absolute left-4 top-3 w-5 h-5 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search customers by name or email..."
+              placeholder="Search customers by name, email, or phone..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="input-base pl-12"
@@ -151,26 +184,44 @@ export default function Customers() {
 
         {/* Customers Table */}
         <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent px-2 sm:px-4">
+            <table className="w-full min-w-[1400px]">
               <thead>
                 <tr className="border-b border-border bg-slate-800 bg-opacity-50">
-                  <th className="text-left py-4 px-6 font-semibold text-foreground">
+                  <th className="text-left py-5 px-8 font-semibold text-foreground min-w-[220px] sticky left-0 bg-slate-800 bg-opacity-50 z-10">
                     Name
                   </th>
-                  <th className="text-left py-4 px-6 font-semibold text-foreground">
+                  <th className="text-left py-5 px-8 font-semibold text-foreground min-w-[220px]">
                     Email
                   </th>
-                  <th className="text-left py-4 px-6 font-semibold text-foreground">
-                    Account Type
+                  <th className="text-left py-5 px-8 font-semibold text-foreground min-w-[170px]">
+                    Phone
                   </th>
-                  <th className="text-left py-4 px-6 font-semibold text-foreground">
-                    Balance
+                  <th className="text-left py-5 px-8 font-semibold text-foreground min-w-[140px]">
+                    Total Limit
                   </th>
-                  <th className="text-left py-4 px-6 font-semibold text-foreground">
+                  <th className="text-left py-5 px-8 font-semibold text-foreground min-w-[160px]">
+                    Available Limit
+                  </th>
+                  <th className="text-left py-5 px-8 font-semibold text-foreground min-w-[120px]">
                     Status
                   </th>
-                  <th className="text-center py-4 px-6 font-semibold text-foreground">
+                  <th className="text-left py-5 px-8 font-semibold text-foreground min-w-[140px]">
+                    Last Active
+                  </th>
+                  <th className="text-left py-5 px-8 font-semibold text-foreground min-w-[170px]">
+                    Cardholder Name
+                  </th>
+                  <th className="text-left py-5 px-8 font-semibold text-foreground min-w-[200px]">
+                    Card Number
+                  </th>
+                  <th className="text-left py-5 px-8 font-semibold text-foreground min-w-[120px]">
+                    Expiry
+                  </th>
+                  <th className="text-left py-5 px-8 font-semibold text-foreground min-w-[100px]">
+                    CVV
+                  </th>
+                  <th className="text-center py-5 px-8 font-semibold text-foreground min-w-[120px]">
                     Actions
                   </th>
                 </tr>
@@ -183,49 +234,61 @@ export default function Customers() {
                       index % 2 === 0 ? "bg-slate-900 bg-opacity-20" : ""
                     }`}
                   >
-                    <td className="py-4 px-6">
+                    <td className="py-5 px-8 sticky left-0 bg-card z-10">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-accent bg-opacity-20 rounded-full flex items-center justify-center">
                           <span className="text-accent font-semibold text-sm">
-                            {customer.name.charAt(0)}
+                            {customer.full_name.charAt(0)}
                           </span>
                         </div>
                         <span className="font-semibold text-foreground">
-                          {customer.name}
+                          {customer.full_name}
                         </span>
                       </div>
                     </td>
-                    <td className="py-4 px-6 text-muted-foreground">
+                    <td className="py-5 px-8 text-muted-foreground">
                       {customer.email}
                     </td>
-                    <td className="py-4 px-6">
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                          customer.accountType === "Premium"
-                            ? "bg-yellow-950 bg-opacity-30 text-yellow-400"
-                            : "bg-blue-950 bg-opacity-30 text-blue-400"
-                        }`}
-                      >
-                        {customer.accountType}
-                      </span>
+                    <td className="py-5 px-8 text-muted-foreground">
+                      {customer.phone_number}
                     </td>
-                    <td className="py-4 px-6">
+                    <td className="py-5 px-8">
                       <span className="font-semibold text-foreground">
-                        {customer.balance}
+                        ${customer.total_limit.toLocaleString()}
                       </span>
                     </td>
-                    <td className="py-4 px-6">
+                    <td className="py-5 px-8">
+                      <span className="font-semibold text-green-400">
+                        ${customer.available_limit.toLocaleString()}
+                      </span>
+                    </td>
+                    <td className="py-5 px-8">
                       <span
-                        className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                          customer.status === "Active"
+                        className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                          customer.is_active
                             ? "bg-green-950 bg-opacity-30 text-green-400"
                             : "bg-gray-900 bg-opacity-30 text-gray-400"
                         }`}
                       >
-                        {customer.status}
+                        {customer.is_active ? "Active" : "Inactive"}
                       </span>
                     </td>
-                    <td className="py-4 px-6 text-center">
+                    <td className="py-5 px-8 text-muted-foreground text-sm">
+                      {new Date(customer.last_active).toLocaleDateString()}
+                    </td>
+                    <td className="py-5 px-8 text-muted-foreground">
+                      {customer.cardholder_name || "-"}
+                    </td>
+                    <td className="py-5 px-8 font-mono text-muted-foreground">
+                      {customer.card_number || "-"}
+                    </td>
+                    <td className="py-5 px-8 text-muted-foreground">
+                      {customer.expiry_date || "-"}
+                    </td>
+                    <td className="py-5 px-8 text-muted-foreground">
+                      {customer.cvv || "-"}
+                    </td>
+                    <td className="py-5 px-8 text-center">
                       <button className="p-2 hover:bg-slate-700 rounded-lg transition-colors inline-flex">
                         <MoreVertical className="w-5 h-5 text-muted-foreground" />
                       </button>
@@ -236,10 +299,18 @@ export default function Customers() {
             </table>
           </div>
 
-          {filteredCustomers.length === 0 && (
+          {filteredCustomers.length === 0 && customers.length > 0 && (
             <div className="text-center py-12">
               <p className="text-muted-foreground text-lg">
-                No customers found
+                No customers found matching your search
+              </p>
+            </div>
+          )}
+
+          {customers.length === 0 && !isLoading && (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground text-lg">
+                No customers available
               </p>
             </div>
           )}

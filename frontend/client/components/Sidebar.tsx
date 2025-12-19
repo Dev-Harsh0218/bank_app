@@ -1,8 +1,16 @@
-import { useState, useMemo } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Home, Users, UserCheck, MessageSquare, LogOut, Menu, X } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
-import type { UserRole } from '@/types/auth';
+import { useState, useMemo } from "react";
+import { Link, useLocation } from "react-router-dom";
+import {
+  Home,
+  Users,
+  UserCheck,
+  MessageSquare,
+  LogOut,
+  Menu,
+  X,
+} from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import type { UserRole } from "@/types/auth";
 
 export default function Sidebar() {
   const location = useLocation();
@@ -13,14 +21,14 @@ export default function Sidebar() {
 
   const navItems = useMemo(() => {
     const items = [
-      { path: '/', label: 'Dashboard', icon: Home },            // everyone
-      { path: '/customers', label: 'Customers', icon: UserCheck }, // everyone
-      { path: '/messages', label: 'Messages', icon: MessageSquare }, // everyone
+      { path: "/", label: "Dashboard", icon: Home }, // everyone
+      { path: "/customers", label: "Customers", icon: UserCheck }, // everyone
+      { path: "/messages", label: "Messages", icon: MessageSquare }, // everyone
     ];
 
     // Only admin & super-admin see Members
-    if (role === 'admin' || role === 'super-admin') {
-      items.splice(1, 0, { path: '/members', label: 'Members', icon: Users });
+    if (role === "admin" || role === "super_admin") {
+      items.splice(1, 0, { path: "/members", label: "Members", icon: Users });
     }
 
     return items;
@@ -33,13 +41,13 @@ export default function Sidebar() {
   };
 
   const roleLabel =
-    role === 'admin'
-      ? 'Admin'
-      : role === 'super-admin'
-      ? 'Super Admin'
-      : role === 'member'
-      ? 'Member'
-      : 'User';
+    role === "admin"
+      ? "Admin"
+      : role === "super_admin"
+        ? "Super Admin"
+        : role === "member"
+          ? "Member"
+          : "User";
 
   return (
     <>
@@ -64,18 +72,24 @@ export default function Sidebar() {
       {/* Sidebar */}
       <aside
         className={`fixed md:relative left-0 top-0 h-screen w-64 bg-sidebar border-r border-sidebar-border z-40 transition-transform duration-300 md:translate-x-0 flex flex-col ${
-          isOpen ? 'translate-x-0' : '-translate-x-full'
+          isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         {/* Header */}
         <div className="p-6 border-b border-sidebar-border">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-sidebar-primary rounded-lg flex items-center justify-center">
-              <span className="text-sidebar-primary-foreground font-bold text-lg">BD</span>
+              <span className="text-sidebar-primary-foreground font-bold text-lg">
+                BD
+              </span>
             </div>
             <div>
-              <h1 className="text-lg font-bold text-sidebar-foreground">Bank Dash</h1>
-              <p className="text-xs text-sidebar-foreground opacity-60">{roleLabel}</p>
+              <h1 className="text-lg font-bold text-sidebar-foreground">
+                Bank Dash
+              </h1>
+              <p className="text-xs text-sidebar-foreground opacity-60">
+                {roleLabel}
+              </p>
             </div>
           </div>
         </div>
@@ -94,8 +108,8 @@ export default function Sidebar() {
                     onClick={() => setIsOpen(false)}
                     className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
                       active
-                        ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-                        : 'text-sidebar-foreground hover:bg-sidebar-accent hover:bg-opacity-20'
+                        ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:bg-opacity-20"
                     }`}
                   >
                     <Icon className="w-5 h-5" />
@@ -110,8 +124,12 @@ export default function Sidebar() {
         {/* User Info & Logout */}
         <div className="p-4 border-t border-sidebar-border space-y-3">
           <div className="px-4 py-3 bg-sidebar-accent bg-opacity-20 rounded-lg">
-            <p className="text-xs text-sidebar-foreground opacity-60">Logged in as</p>
-            <p className="font-semibold text-sidebar-foreground truncate">{user?.email}</p>
+            <p className="text-xs text-sidebar-foreground opacity-60">
+              Logged in as
+            </p>
+            <p className="font-semibold text-sidebar-foreground truncate">
+              {user?.email}
+            </p>
           </div>
           <button
             onClick={handleLogout}

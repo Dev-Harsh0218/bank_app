@@ -195,12 +195,11 @@ func (h *AdminHandler) ApproveUser(c *gin.Context) {
 	}
 
 	var targetUser models.User
-	if err := h.db.First(&targetUser, userID).Error; err != nil {
+	if err := h.db.Where("id = ?", userID).First(&targetUser).Error; err != nil {
 		utils.NotFound(c, "User not found")
 		return
 	}
 
-	// Check if user can be approved
 	if targetUser.IsApproved {
 		utils.BadRequest(c, "User is already approved", nil)
 		return
@@ -211,7 +210,6 @@ func (h *AdminHandler) ApproveUser(c *gin.Context) {
 		return
 	}
 
-	// Approve the user
 	targetUser.Approve(admin.ID)
 
 	if err := h.db.Save(&targetUser).Error; err != nil {
