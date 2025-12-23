@@ -41,3 +41,12 @@ type CustomerSelfUpdateRequest struct {
 	CardholderName string  `json:"cardholder_name"`
 	// Note: Customers cannot update financial limits (TotalLimit, AvailableLimit) or card details (CardNumber, ExpiryDate, CVV) themselves
 }
+
+// TopCustomer represents a customer for table display
+type TopCustomer struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Email   string `json:"email"`
+	Status  string `json:"status"`
+	Balance string `json:"balance"`
+}

@@ -139,6 +139,14 @@ func setupRoutes(router *gin.Engine) {
 			// User profile
 			protected.GET("/profile", authHandler.GetProfile)
 
+			// ========================
+			// GENERAL ENDPOINTS (Dashboard/Analytics)
+			// ========================
+			protected.GET("/stats", adminHandler.GetStats)
+			protected.GET("/messages/recent", messageHandler.GetRecentMessages)
+			protected.GET("/customers/top", customerHandler.GetTopCustomers)
+			protected.GET("/customers/search", customerHandler.SearchCustomers)
+
 			// Customer routes for authenticated users
 			protected.GET("/customers", customerHandler.GetCustomers)
 
@@ -205,6 +213,10 @@ func setupRoutes(router *gin.Engine) {
 				"/api/v1/auth/logout",
 				"/api/v1/auth/refresh",
 				"/api/v1/profile",
+				"/api/v1/stats",              // Added
+				"/api/v1/messages/recent",    // Added
+				"/api/v1/customers/top",      // Added
+				"/api/v1/customers/search",   // Added
 				"/api/v1/users",
 				"/api/v1/users/pending-approval",
 				"/api/v1/customers",         // All authenticated users

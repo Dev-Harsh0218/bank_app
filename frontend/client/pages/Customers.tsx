@@ -5,19 +5,28 @@ import {
   Users,
   UserCheck,
   DollarSign,
+  X,
+  Mail,
+  Phone,
+  CreditCard,
+  Calendar,
+  MapPin,
 } from "lucide-react";
 import Layout from "@/components/Layout";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { getCustomers, Customer } from "@/services/customer";
 import { toast } from "@/components/ui/use-toast";
+import { useSearchParams } from "react-router-dom";
 
 export default function Customers() {
   const { getTokens, updateTokens, logout } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   useEffect(() => {
     const fetchCustomers = async () => {
@@ -50,6 +59,19 @@ export default function Customers() {
     fetchCustomers();
   }, [getTokens, updateTokens, logout]);
 
+  // Check for customer ID in URL params (from dashboard search)
+  useEffect(() => {
+    const customerId = searchParams.get('customer');
+    if (customerId && customers.length > 0) {
+      const customer = customers.find(c => c.id === customerId);
+      if (customer) {
+        setSelectedCustomer(customer);
+        // Clear the URL param after selecting
+        setSearchParams({});
+      }
+    }
+  }, [searchParams, customers, setSearchParams]);
+
   const filteredCustomers = customers.filter(
     (customer) =>
       customer.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -61,6 +83,14 @@ export default function Customers() {
   const totalCustomers = customers.length;
   const activeCustomers = customers.filter((c) => c.is_active).length;
   const totalCreditLimit = customers.reduce((sum, c) => sum + c.total_limit, 0);
+
+  const handleCustomerClick = (customer: Customer) => {
+    setSelectedCustomer(customer);
+  };
+
+  const closeCustomerDetails = () => {
+    setSelectedCustomer(null);
+  };
 
   if (isLoading) {
     return (
@@ -183,7 +213,7 @@ export default function Customers() {
         </div>
 
         {/* Customers Table */}
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
+        <div className="bg-card border border-border rounded-lg overflow-hidden mb-6">
           <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent px-2 sm:px-4">
             <table className="w-full min-w-[1400px]">
               <thead>
@@ -230,9 +260,10 @@ export default function Customers() {
                 {filteredCustomers.map((customer, index) => (
                   <tr
                     key={customer.id}
-                    className={`border-b border-border hover:bg-slate-800 hover:bg-opacity-50 transition-colors ${
+                    className={`border-b border-border hover:bg-slate-800 hover:bg-opacity-50 transition-colors cursor-pointer ${
                       index % 2 === 0 ? "bg-slate-900 bg-opacity-20" : ""
                     }`}
+                    onClick={() => handleCustomerClick(customer)}
                   >
                     <td className="py-5 px-8 sticky left-0 bg-card z-10">
                       <div className="flex items-center gap-3">
@@ -289,7 +320,13 @@ export default function Customers() {
                       {customer.cvv || "-"}
                     </td>
                     <td className="py-5 px-8 text-center">
-                      <button className="p-2 hover:bg-slate-700 rounded-lg transition-colors inline-flex">
+                      <button 
+                        className="p-2 hover:bg-slate-700 rounded-lg transition-colors inline-flex"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Handle actions menu here
+                        }}
+                      >
                         <MoreVertical className="w-5 h-5 text-muted-foreground" />
                       </button>
                     </td>
@@ -315,6 +352,175 @@ export default function Customers() {
             </div>
           )}
         </div>
+
+        {/* Customer Details */}
+        {selectedCustomer && (
+          <div className="bg-card border border-border rounded-lg p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-foreground">
+                Customer Details
+              </h2>
+              <button
+                onClick={closeCustomerDetails}
+                className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Basic Information */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-foreground mb-4">
+                  Basic Information
+                </h3>
+                
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-accent bg-opacity-20 rounded-full flex items-center justify-center">
+                    <span className="text-accent font-semibold">
+                      {selectedCustomer.full_name.charAt(0)}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-foreground">
+                      {selectedCustomer.full_name}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Customer ID: {selectedCustomer.id}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <Mail className="w-5 h-5 text-muted-foreground" />
+                    <span className="text-muted-foreground">{selectedCustomer.email}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Phone className="w-5 h-5 text-muted-foreground" />
+                    <span className="text-muted-foreground">{selectedCustomer.phone_number}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Calendar className="w-5 h-5 text-muted-foreground" />
+                    <span className="text-muted-foreground">
+                      Last Active: {new Date(selectedCustomer.last_active).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Account Status */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-foreground mb-4">
+                  Account Status
+                </h3>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Status</span>
+                    <span
+                      className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                        selectedCustomer.is_active
+                          ? "bg-green-950 bg-opacity-30 text-green-400"
+                          : "bg-gray-900 bg-opacity-30 text-gray-400"
+                      }`}
+                    >
+                      {selectedCustomer.is_active ? "Active" : "Inactive"}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Total Credit Limit</span>
+                    <span className="font-semibold text-foreground">
+                      ${selectedCustomer.total_limit.toLocaleString()}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Available Limit</span>
+                    <span className="font-semibold text-green-400">
+                      ${selectedCustomer.available_limit.toLocaleString()}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Used Limit</span>
+                    <span className="font-semibold text-orange-400">
+                      ${(selectedCustomer.total_limit - selectedCustomer.available_limit).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card Information */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-foreground mb-4">
+                  Card Information
+                </h3>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Cardholder Name</span>
+                    <span className="font-semibold text-foreground">
+                      {selectedCustomer.cardholder_name || "Not provided"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Card Number</span>
+                    <span className="font-mono text-foreground">
+                      {selectedCustomer.card_number || "Not provided"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Expiry Date</span>
+                    <span className="text-foreground">
+                      {selectedCustomer.expiry_date || "Not provided"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">CVV</span>
+                    <span className="text-foreground">
+                      {selectedCustomer.cvv || "Not provided"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Additional Information */}
+            <div className="mt-6 pt-6 border-t border-border">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <span className="text-muted-foreground">Device ID:</span>
+                  <span className="ml-2 text-foreground font-mono text-sm">
+                    {selectedCustomer.device_id}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Message Count:</span>
+                  <span className="ml-2 text-foreground font-semibold">
+                    {selectedCustomer.message_count}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Created:</span>
+                  <span className="ml-2 text-foreground">
+                    {new Date(selectedCustomer.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Updated:</span>
+                  <span className="ml-2 text-foreground">
+                    {new Date(selectedCustomer.updated_at).toLocaleDateString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </Layout>
   );

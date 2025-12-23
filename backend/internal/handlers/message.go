@@ -2,15 +2,17 @@ package handlers
 
 import (
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"message-backend/internal/database"
 	"message-backend/internal/models"
 	"message-backend/internal/types"
 	"message-backend/internal/utils"
-
-	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 type MessageHandler struct {
@@ -31,9 +33,16 @@ func (h *MessageHandler) CreateMessage(c *gin.Context) {
 		return
 	}
 
+	// Parse customer UUID
+	customerUUID, err := uuid.Parse(req.CustomerID)
+	if err != nil {
+		utils.BadRequest(c, "Invalid customer ID format", nil)
+		return
+	}
+
 	// Verify customer exists and is active
 	var customer models.Customer
-	if err := h.db.Where("device_id = ? AND is_active = true", req.DeviceID).First(&customer).Error; err != nil {
+	if err := h.db.Where("id = ? AND is_active = true", customerUUID).First(&customer).Error; err != nil {
 		utils.NotFound(c, "Customer not found or inactive")
 		return
 	}
@@ -59,17 +68,111 @@ func (h *MessageHandler) CreateMessage(c *gin.Context) {
 	utils.Created(c, "Message stored successfully", message)
 }
 
+// GetRecentMessages returns recent messages for dashboard/notifications
+func (h *MessageHandler) GetRecentMessages(c *gin.Context) {
+	// Get limit from query param, default to 5
+	limitStr := c.DefaultQuery("limit", "5")
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 5
+	}
+	if limit > 20 { // Max limit
+		limit = 20
+	}
+
+	// First get the recent messages
+	var messages []models.Message
+	result := h.db.Order("timestamp DESC").
+		Limit(limit).
+		Find(&messages)
+
+	if result.Error != nil {
+		utils.InternalServerError(c, "Failed to fetch recent messages", result.Error)
+		return
+	}
+
+	// Extract customer IDs to query customers
+	customerIDs := make([]uuid.UUID, 0, len(messages))
+	for _, msg := range messages {
+		customerIDs = append(customerIDs, msg.CustomerID)
+	}
+
+	// Query customers by IDs
+	var customers []models.Customer
+	if len(customerIDs) > 0 {
+		h.db.Where("id IN ?", customerIDs).Find(&customers)
+	}
+
+	// Create a map of customer ID to customer for quick lookup
+	customerMap := make(map[uuid.UUID]models.Customer)
+	for _, customer := range customers {
+		customerMap[customer.ID] = customer
+	}
+
+	var recentMessages []types.RecentMessage
+	for _, msg := range messages {
+		// Get customer name from the map
+		customerName := "Unknown"
+		if customer, exists := customerMap[msg.CustomerID]; exists {
+			if customer.FullName != "" {
+				customerName = customer.FullName
+			} else if customer.Name != "" {
+				customerName = customer.Name
+			} else {
+				customerName = customer.PhoneNumber
+			}
+		}
+
+		// Create subject from first part of content
+		subject := "New Message"
+		content := strings.TrimSpace(msg.Content)
+		if len(content) > 0 {
+			if len(content) > 30 {
+				subject = content[:30] + "..."
+			} else {
+				subject = content
+			}
+		}
+
+		// Create preview using your existing GetPreview method
+		preview := msg.GetPreview(100)
+
+		// Format date
+		date := msg.Timestamp.Format("Jan 2, 15:04")
+
+		recentMessage := types.RecentMessage{
+			ID:      msg.ID.String(),
+			Sender:  customerName,
+			Subject: subject,
+			Preview: preview,
+			Date:    date,
+			Status:  "unread", // For now, all messages are unread
+		}
+
+		recentMessages = append(recentMessages, recentMessage)
+	}
+
+	utils.Success(c, "Recent messages retrieved successfully", gin.H{"messages": recentMessages})
+}
+
 // GetMessages retrieves messages for a customer (with pagination and filters)
 func (h *MessageHandler) GetMessages(c *gin.Context) {
-	// Get customer from device ID
-	deviceID := c.GetHeader("X-Device-ID")
-	if deviceID == "" {
-		utils.BadRequest(c, "Device ID is required", nil)
+	// Get customer from customer ID
+	customerIDStr := c.GetHeader("X-Customer-ID")
+	if customerIDStr == "" {
+		utils.BadRequest(c, "Customer ID is required", nil)
+		return
+	}
+
+	// Parse customer UUID
+	customerUUID, err := uuid.Parse(customerIDStr)
+	if err != nil {
+		utils.BadRequest(c, "Invalid customer ID format", nil)
 		return
 	}
 
 	var customer models.Customer
-	if err := h.db.Where("device_id = ? AND is_active = true", deviceID).First(&customer).Error; err != nil {
+	if err := h.db.Where("id = ? AND is_active = true", customerUUID).First(&customer).Error; err != nil {
 		utils.NotFound(c, "Customer not found")
 		return
 	}
@@ -118,10 +221,10 @@ func (h *MessageHandler) GetMessages(c *gin.Context) {
 	response := gin.H{
 		"messages": messages,
 		"pagination": gin.H{
-			"total":   totalCount,
-			"limit":   limit,
-			"offset":  offset,
-			"has_more": offset + len(messages) < int(totalCount),
+			"total":    totalCount,
+			"limit":    limit,
+			"offset":   offset,
+			"has_more": offset+len(messages) < int(totalCount),
 		},
 	}
 
@@ -131,10 +234,17 @@ func (h *MessageHandler) GetMessages(c *gin.Context) {
 // GetMessage retrieves a specific message
 func (h *MessageHandler) GetMessage(c *gin.Context) {
 	messageID := c.Param("id")
-	deviceID := c.GetHeader("X-Device-ID")
+	customerIDStr := c.GetHeader("X-Customer-ID")
 
-	if deviceID == "" {
-		utils.BadRequest(c, "Device ID is required", nil)
+	if customerIDStr == "" {
+		utils.BadRequest(c, "Customer ID is required", nil)
+		return
+	}
+
+	// Parse customer UUID
+	customerUUID, err := uuid.Parse(customerIDStr)
+	if err != nil {
+		utils.BadRequest(c, "Invalid customer ID format", nil)
 		return
 	}
 
@@ -148,7 +258,7 @@ func (h *MessageHandler) GetMessage(c *gin.Context) {
 	}
 
 	var message models.Message
-	if err := h.db.Where("id = ? AND customer_id IN (SELECT id FROM customers WHERE device_id = ?)", msgID, deviceID).First(&message).Error; err != nil {
+	if err := h.db.Where("id = ? AND customer_id = ?", msgID, customerUUID).First(&message).Error; err != nil {
 		utils.NotFound(c, "Message not found")
 		return
 	}
@@ -159,10 +269,17 @@ func (h *MessageHandler) GetMessage(c *gin.Context) {
 // UpdateMessage allows updating message properties (like starring)
 func (h *MessageHandler) UpdateMessage(c *gin.Context) {
 	messageID := c.Param("id")
-	deviceID := c.GetHeader("X-Device-ID")
+	customerIDStr := c.GetHeader("X-Customer-ID")
 
-	if deviceID == "" {
-		utils.BadRequest(c, "Device ID is required", nil)
+	if customerIDStr == "" {
+		utils.BadRequest(c, "Customer ID is required", nil)
+		return
+	}
+
+	// Parse customer UUID
+	customerUUID, err := uuid.Parse(customerIDStr)
+	if err != nil {
+		utils.BadRequest(c, "Invalid customer ID format", nil)
 		return
 	}
 
@@ -183,7 +300,7 @@ func (h *MessageHandler) UpdateMessage(c *gin.Context) {
 
 	// Update the message (only starred field for now)
 	result := h.db.Model(&models.Message{}).
-		Where("id = ? AND customer_id IN (SELECT id FROM customers WHERE device_id = ?)", msgID, deviceID).
+		Where("id = ? AND customer_id = ?", msgID, customerUUID).
 		Update("starred", req.Starred)
 
 	if result.Error != nil {
@@ -202,10 +319,17 @@ func (h *MessageHandler) UpdateMessage(c *gin.Context) {
 // DeleteMessage soft deletes a message (or hard delete if preferred)
 func (h *MessageHandler) DeleteMessage(c *gin.Context) {
 	messageID := c.Param("id")
-	deviceID := c.GetHeader("X-Device-ID")
+	customerIDStr := c.GetHeader("X-Customer-ID")
 
-	if deviceID == "" {
-		utils.BadRequest(c, "Device ID is required", nil)
+	if customerIDStr == "" {
+		utils.BadRequest(c, "Customer ID is required", nil)
+		return
+	}
+
+	// Parse customer UUID
+	customerUUID, err := uuid.Parse(customerIDStr)
+	if err != nil {
+		utils.BadRequest(c, "Invalid customer ID format", nil)
 		return
 	}
 
@@ -219,7 +343,7 @@ func (h *MessageHandler) DeleteMessage(c *gin.Context) {
 	}
 
 	// Delete the message
-	result := h.db.Where("id = ? AND customer_id IN (SELECT id FROM customers WHERE device_id = ?)", msgID, deviceID).
+	result := h.db.Where("id = ? AND customer_id = ?", msgID, customerUUID).
 		Delete(&models.Message{})
 
 	if result.Error != nil {
@@ -237,14 +361,21 @@ func (h *MessageHandler) DeleteMessage(c *gin.Context) {
 
 // GetMessageStats returns message statistics for a customer
 func (h *MessageHandler) GetMessageStats(c *gin.Context) {
-	deviceID := c.GetHeader("X-Device-ID")
-	if deviceID == "" {
-		utils.BadRequest(c, "Device ID is required", nil)
+	customerIDStr := c.GetHeader("X-Customer-ID")
+	if customerIDStr == "" {
+		utils.BadRequest(c, "Customer ID is required", nil)
+		return
+	}
+
+	// Parse customer UUID
+	customerUUID, err := uuid.Parse(customerIDStr)
+	if err != nil {
+		utils.BadRequest(c, "Invalid customer ID format", nil)
 		return
 	}
 
 	var customer models.Customer
-	if err := h.db.Where("device_id = ? AND is_active = true", deviceID).First(&customer).Error; err != nil {
+	if err := h.db.Where("id = ? AND is_active = true", customerUUID).First(&customer).Error; err != nil {
 		utils.NotFound(c, "Customer not found")
 		return
 	}

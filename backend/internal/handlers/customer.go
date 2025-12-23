@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"message-backend/internal/database"
@@ -100,6 +102,131 @@ func (h *CustomerHandler) GetCustomers(c *gin.Context) {
 	}
 
 	utils.Success(c, "Customers retrieved successfully", customers)
+}
+
+// GetTopCustomers returns top customers by credit limit
+func (h *CustomerHandler) GetTopCustomers(c *gin.Context) {
+	// Get limit from query param, default to 10
+	limitStr := c.DefaultQuery("limit", "10")
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 10
+	}
+	if limit > 50 { // Max limit
+		limit = 50
+	}
+
+	var customers []models.Customer
+	result := h.db.Where("is_active = ?", true).
+		Order("total_limit DESC").
+		Limit(limit).
+		Find(&customers)
+
+	if result.Error != nil {
+		utils.InternalServerError(c, "Failed to fetch top customers", result.Error)
+		return
+	}
+
+	var topCustomers []types.TopCustomer
+	for _, customer := range customers {
+		// Get customer name (using your existing logic)
+		name := customer.PhoneNumber // Default to phone
+		if customer.FullName != "" {
+			name = customer.FullName
+		} else if customer.Name != "" {
+			name = customer.Name
+		}
+
+		// Determine status
+		status := "Inactive"
+		if customer.IsActive {
+			status = "Active"
+		}
+
+		// Format balance
+		balance := fmt.Sprintf("$%.2f", customer.TotalLimit)
+
+		topCustomer := types.TopCustomer{
+			ID:      customer.ID.String(),
+			Name:    name,
+			Email:   customer.Email,
+			Status:  status,
+			Balance: balance,
+		}
+
+		topCustomers = append(topCustomers, topCustomer)
+	}
+
+	utils.Success(c, "Top customers retrieved successfully", gin.H{"customers": topCustomers})
+}
+
+// SearchCustomers searches customers by name or email
+func (h *CustomerHandler) SearchCustomers(c *gin.Context) {
+	query := c.Query("q")
+	if strings.TrimSpace(query) == "" {
+		utils.BadRequest(c, "Search query is required", nil)
+		return
+	}
+
+	// Get limit from query param, default to 20
+	limitStr := c.DefaultQuery("limit", "20")
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 { // Max limit for search
+		limit = 100
+	}
+
+	var customers []models.Customer
+
+	// Search by name or email (case insensitive)
+	searchPattern := "%" + strings.ToLower(query) + "%"
+	result := h.db.Where(
+		"LOWER(full_name) LIKE ? OR LOWER(name) LIKE ? OR LOWER(email) LIKE ? OR phone_number LIKE ?",
+		searchPattern, searchPattern, searchPattern, searchPattern,
+	).
+		Order("full_name ASC, name ASC").
+		Limit(limit).
+		Find(&customers)
+
+	if result.Error != nil {
+		utils.InternalServerError(c, "Failed to search customers", result.Error)
+		return
+	}
+
+	var searchResults []types.TopCustomer
+	for _, customer := range customers {
+		// Get customer name (using your existing logic)
+		name := customer.PhoneNumber // Default to phone
+		if customer.FullName != "" {
+			name = customer.FullName
+		} else if customer.Name != "" {
+			name = customer.Name
+		}
+
+		// Determine status
+		status := "Inactive"
+		if customer.IsActive {
+			status = "Active"
+		}
+
+		// Format balance
+		balance := fmt.Sprintf("$%.2f", customer.TotalLimit)
+
+		searchResult := types.TopCustomer{
+			ID:      customer.ID.String(),
+			Name:    name,
+			Email:   customer.Email,
+			Status:  status,
+			Balance: balance,
+		}
+
+		searchResults = append(searchResults, searchResult)
+	}
+
+	utils.Success(c, fmt.Sprintf("Found %d customers matching '%s'", len(searchResults), query),
+		gin.H{"customers": searchResults, "query": query})
 }
 
 // GetCustomer returns a specific customer by ID (admin only)

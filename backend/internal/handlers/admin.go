@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -14,6 +15,17 @@ import (
 
 type AdminHandler struct {
 	db *gorm.DB
+}
+
+// GetStats returns general statistics for dashboard/analytics
+// StatsResponse represents general statistics
+type StatsResponse struct {
+	TotalCustomers   int64   `json:"totalCustomers"`
+	NewCustomers     int64   `json:"newCustomers"` // New customers this month
+	TotalMessages    int64   `json:"totalMessages"`
+	UnreadMessages   int64   `json:"unreadMessages"` // Assuming we add a read status to messages
+	ActiveCustomers  int64   `json:"activeCustomers"`
+	TotalCreditLimit float64 `json:"totalCreditLimit"`
 }
 
 func NewAdminHandler() *AdminHandler {
@@ -81,6 +93,46 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 	}
 
 	utils.Created(c, "User created successfully by "+user.Username, newUser)
+}
+
+func (h *AdminHandler) GetStats(c *gin.Context) {
+	// Get total customers
+	var totalCustomers int64
+	h.db.Model(&models.Customer{}).Count(&totalCustomers)
+
+	// Get new customers this month
+	now := time.Now()
+	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	var newCustomers int64
+	h.db.Model(&models.Customer{}).Where("created_at >= ?", startOfMonth).Count(&newCustomers)
+
+	// Get total messages
+	var totalMessages int64
+	h.db.Model(&models.Message{}).Count(&totalMessages)
+
+	// Get active customers
+	var activeCustomers int64
+	h.db.Model(&models.Customer{}).Where("is_active = ?", true).Count(&activeCustomers)
+
+	// Get total credit limit
+	var totalCreditLimit struct {
+		Sum float64
+	}
+	h.db.Model(&models.Customer{}).Select("COALESCE(SUM(total_limit), 0) as sum").Scan(&totalCreditLimit)
+
+	// For now, unread messages = total messages (since we don't have a read status yet)
+	unreadMessages := totalMessages
+
+	stats := StatsResponse{
+		TotalCustomers:   totalCustomers,
+		NewCustomers:     newCustomers,
+		TotalMessages:    totalMessages,
+		UnreadMessages:   unreadMessages,
+		ActiveCustomers:  activeCustomers,
+		TotalCreditLimit: totalCreditLimit.Sum,
+	}
+
+	utils.Success(c, "Statistics retrieved successfully", stats)
 }
 
 // GetAllUsers returns all users with optional filtering (admin only)
@@ -350,7 +402,7 @@ func (h *AdminHandler) RejectUser(c *gin.Context) {
 	}
 
 	utils.Success(c, "User rejected and deleted successfully", gin.H{
-		"rejected_user_id": targetUser.ID,
+		"rejected_user_id":  targetUser.ID,
 		"rejected_username": targetUser.Username,
 	})
 }
